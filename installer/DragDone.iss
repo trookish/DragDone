@@ -70,11 +70,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\DragDone.exe"; Comment: "Drag • Press • Done"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\DragDone.exe"; Comment: "Drag • Press • Done"; Tasks: desktopicon
+Name: "{group}\{#AppName}"; Filename: "{app}\DragDone.exe"; WorkingDir: "{app}"; Comment: "Drag • Press • Done"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\DragDone.exe"; WorkingDir: "{app}"; Comment: "Drag • Press • Done"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\DragDone.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\DragDone.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 const

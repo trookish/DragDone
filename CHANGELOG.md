@@ -3,6 +3,31 @@
 All notable changes to DragDone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-10-21
+
+### Fixed
+
+- Video and audio jobs no longer fail with `An error occurred trying to start process … ffmpeg.exe`.
+  Setup used to launch the app from its own temp folder, which is deleted when Setup closes, and
+  every child process inherited that dead working directory. The installer now starts the app in
+  its install folder, the app moves itself out of a working directory that no longer exists, and
+  FFmpeg is always launched from a folder that is really there.
+- FFmpeg is now verified by running it, not by checking that the file exists. A WinGet or Scoop
+  shim left behind by an uninstall is skipped instead of being handed a job it cannot do, and a
+  launch that still fails says "Requires FFmpeg. Set its location in Settings." rather than
+  dumping a Win32 message.
+- Audio actions on a clip with no audio track, and video actions on a file with no video track,
+  now say exactly that instead of showing FFmpeg's `Stream map '' matches no streams`.
+- The live preview is a square plate with the ring drawn tight to the bounds it actually occupies
+  and centred to the pixel, so it no longer sits small and off-centre in a wide box or loses its
+  outer labels at large ring sizes. The hint is centred under it, and the floating copy is opaque
+  so the rows behind it no longer ghost through.
+- The app icon in Settings is drawn from the largest frame in the file instead of the 16px one
+  stretched to 40px, which is what made it look soft.
+- Changing a value no longer loses the scroll position when the change rebuilds the page and
+  repaints the window in the same instant; the window chrome is only re-templated when the chrome
+  itself changes.
+
 ## [1.0.0] — 2026-10-21
 
 First public release.

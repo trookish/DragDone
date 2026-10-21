@@ -34,6 +34,18 @@ public partial class App : Application
     {
         base.OnStartup(e);
         DispatcherUnhandledException += OnUnhandled;
+        // A shortcut or an installer can start us with a working directory that no longer exists.
+        // Children inherit it, so every process launch would fail with "the directory name is
+        // invalid" — which is exactly how video and audio jobs used to die. Move somewhere real.
+        try
+        {
+            if (!Directory.Exists(Environment.CurrentDirectory))
+                Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Diag.Log($"working directory left alone: {ex.Message}");
+        }
         var args = e.Args;
 
         if (args.Length > 0 && args[0] == "--run")

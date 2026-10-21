@@ -178,7 +178,7 @@ instead of disappearing.
 
 ## Get it
 
-Download **[DragDone 1.0.0 setup](https://github.com/trookish/DragDone/releases/latest)** and run it.
+Download **[DragDone setup](https://github.com/trookish/DragDone/releases/latest)** and run it.
 The installer carries everything the app needs — including the .NET runtime — so there is nothing
 else to download first.
 
@@ -234,7 +234,7 @@ The installer. It publishes the self-contained build and compiles `installer/Dra
 setup file; the version comes from the csproj.
 
 ```bash
-pwsh tools/build_installer.ps1            # artifacts\DragDone-1.0.0-setup.exe
+pwsh tools/build_installer.ps1            # artifacts\DragDone-<version>-setup.exe
 ```
 
 Needs [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`). Tagging

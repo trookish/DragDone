@@ -12,12 +12,15 @@ public static partial class Ffmpeg
 {
     static string? _cached;
     static string? _cachedFor;
+    static readonly Dictionary<string, bool> Verified = new(StringComparer.OrdinalIgnoreCase);
 
     public static string? Locate(string? configured)
     {
-        if (_cachedFor == (configured ?? "") && _cached is not null && File.Exists(_cached)) return _cached;
+        if (_cachedFor == (configured ?? "") && _cached is not null) return _cached;
         _cachedFor = configured ?? "";
-        _cached = Candidates(configured).FirstOrDefault(File.Exists);
+        // Existing is not the same as working: WinGet and Scoop leave a shim behind after an
+        // uninstall, and a shim that cannot start is worse than no FFmpeg at all.
+        _cached = Candidates(configured).FirstOrDefault(CanRun);
         return _cached;
     }
 
@@ -25,6 +28,67 @@ public static partial class Ffmpeg
     {
         _cached = null;
         _cachedFor = null;
+        Verified.Clear();
+    }
+
+    /// <summary>True when the file is actually a working FFmpeg, not just a path that exists.</summary>
+    static bool CanRun(string path)
+    {
+        if (!File.Exists(path)) return false;
+        if (Verified.TryGetValue(path, out var known)) return known;
+
+        var ok = false;
+        try
+        {
+            var psi = new ProcessStartInfo(path)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                // A working directory that vanished is enough to make a launch fail outright.
+                WorkingDirectory = SafeWorkingDirectory(null),
+            };
+            psi.ArgumentList.Add("-hide_banner");
+            psi.ArgumentList.Add("-version");
+            using var probe = Process.Start(psi);
+            if (probe is not null)
+            {
+                var banner = probe.StandardOutput.ReadToEnd();
+                probe.WaitForExit(5000);
+                ok = probe.HasExited && probe.ExitCode == 0 &&
+                     banner.Contains("ffmpeg version", StringComparison.OrdinalIgnoreCase);
+                if (!probe.HasExited) probe.Kill(true);
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            ok = false;
+        }
+
+        Verified[path] = ok;
+        return ok;
+    }
+
+    /// <summary>
+    /// A directory that certainly exists, preferring the one the work happens in. Passing no
+    /// working directory inherits the process's, which may point at a folder that has since been
+    /// deleted — the launch then fails with "the directory name is invalid".
+    /// </summary>
+    internal static string SafeWorkingDirectory(string? beside)
+    {
+        var candidates = new[]
+        {
+            string.IsNullOrEmpty(beside) ? null : Path.GetDirectoryName(beside),
+            Path.GetTempPath(),
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+        };
+        foreach (var dir in candidates)
+        {
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) return dir;
+        }
+        return AppContext.BaseDirectory;
     }
 
     static IEnumerable<string> Candidates(string? configured)
@@ -102,6 +166,7 @@ public static partial class Ffmpeg
             RedirectStandardOutput = true,
             StandardErrorEncoding = Encoding.UTF8,
             StandardOutputEncoding = Encoding.UTF8,
+            WorkingDirectory = SafeWorkingDirectory(output),
         };
         foreach (var a in new[] { "-hide_banner", "-nostdin", "-y", "-progress", "pipe:1", "-nostats" }) psi.ArgumentList.Add(a);
         foreach (var a in args) psi.ArgumentList.Add(a);
@@ -133,7 +198,18 @@ public static partial class Ffmpeg
             }
         };
 
-        proc.Start();
+        try
+        {
+            proc.Start();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // Whatever went wrong, the user gets a sentence and a way forward, not a Win32 dump.
+            _cached = null;
+            Verified.Clear();
+            throw new UserFacingException($"{Loc.T("reason.needsFfmpeg")} ({ex.Message})");
+        }
+
         proc.BeginErrorReadLine();
         proc.BeginOutputReadLine();
         using (ctx.Token.Register(() =>
@@ -176,6 +252,7 @@ public static partial class Ffmpeg
             CreateNoWindow = true,
             RedirectStandardError = true,
             StandardErrorEncoding = Encoding.UTF8,
+            WorkingDirectory = SafeWorkingDirectory(input),
         };
         psi.ArgumentList.Add("-hide_banner");
         psi.ArgumentList.Add("-i");

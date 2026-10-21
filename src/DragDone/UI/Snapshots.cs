@@ -274,9 +274,97 @@ public static class Snapshots
             Check("preview still floating after the change", window.FloatingPreviewShown,
                 $"scroll {window.ScrollOffset:0}");
 
+            // The preview has to look right at the smallest and largest ring, not just at the
+            // default: a crop that is too tight clips the outer labels, one that is too loose
+            // leaves the ring small and off-centre with dead space around it.
+            var wasDiameter = settings.MenuDiameter;
+            foreach (var diameter in new[] { 240.0, 520.0 })
+            {
+                settings.MenuDiameter = diameter;
+                window.RebuildNow();
+                window.RedrawPreview();
+                Pump(window.Dispatcher, 300);
+                var shot = window.PreviewSource;
+                if (shot is null)
+                {
+                    Check($"preview renders at {diameter:0}px", false, "no bitmap");
+                    continue;
+                }
+                var ink = InkBounds(shot);
+                var square = Math.Abs(shot.PixelWidth - shot.PixelHeight) <= 1;
+                var inside = ink.Left > 6 && ink.Top > 6 &&
+                             ink.Right < shot.PixelWidth - 6 && ink.Bottom < shot.PixelHeight - 6;
+                Check($"preview is square and unclipped at {diameter:0}px", square && inside,
+                    $"{shot.PixelWidth}x{shot.PixelHeight}, ink {ink.Left:0},{ink.Top:0} to {ink.Right:0},{ink.Bottom:0}");
+                // The ring is placed by arithmetic, so check that, and check the ink sitting around
+                // it is balanced enough that it reads as centred rather than pushed to one side.
+                var offX = window.PreviewOffX;
+                var offY = window.PreviewOffY;
+                var slack = shot.PixelWidth * 0.06;
+                var balanceX = Math.Abs(ink.Left - (shot.PixelWidth - ink.Right));
+                var balanceY = Math.Abs(ink.Top - (shot.PixelHeight - ink.Bottom));
+                Check($"preview ring is centred at {diameter:0}px",
+                    offX <= 0.5 && offY <= 0.5 && balanceX <= slack + 12 && balanceY <= slack + 12,
+                    $"placement {offX:0.0}x{offY:0.0}, ink balance {balanceX:0}x{balanceY:0}");
+            }
+            settings.MenuDiameter = wasDiameter;
+            window.RebuildNow();
+            window.RedrawPreview();
+            Pump(window.Dispatcher, 300);
+
+            // Changing a value is the common case: click a choice, drag a slider, tick a box. None of
+            // those may move the page under the user.
+            var choiceAt = window.ScrollOffset;
+            var pill = FindAll<RadioButton>(window).FirstOrDefault(r => r.IsChecked != true && r.IsVisible);
+            if (pill is not null)
+            {
+                pill.IsChecked = true;   // exactly what a click does
+                Pump(window.Dispatcher, 600);
+                Check("clicking a choice keeps the scroll", Math.Abs(window.ScrollOffset - choiceAt) < 4,
+                    $"{choiceAt:0} -> {window.ScrollOffset:0}");
+            }
+            else
+            {
+                lines.Add("  SKIP  clicking a choice keeps the scroll      no unchecked pill");
+            }
+
+            var sliderAt = window.ScrollOffset;
+            var slider = FindAll<Slider>(window).FirstOrDefault(s => s.IsVisible && s.IsEnabled);
+            if (slider is not null)
+            {
+                var step = (slider.Maximum - slider.Minimum) * 0.1;
+                slider.Value = Math.Min(slider.Maximum, slider.Value + step);
+                Pump(window.Dispatcher, 600);
+                Check("dragging a slider keeps the scroll", Math.Abs(window.ScrollOffset - sliderAt) < 4,
+                    $"{sliderAt:0} -> {window.ScrollOffset:0} at {slider.Value:0}");
+            }
+            else
+            {
+                lines.Add("  SKIP  dragging a slider keeps the scroll      no visible slider");
+            }
+
             window.ScrollToY(0);
             Pump(window.Dispatcher, 420);
             Check("floating copy hides at the top", !window.FloatingPreviewShown, "back inline");
+
+            // Changing something that both rebuilds the page and repaints the window used to park
+            // a half-restored position and then restore that, which is the jump users noticed.
+            window.ScrollToY(760);
+            Pump(window.Dispatcher, 420);
+            var raceAt = window.ScrollOffset;
+            window.RebuildNow();
+            settings.Theme = settings.Theme == ColorMode.Dark ? ColorMode.Light : ColorMode.Dark;
+            Theme.Attach(settings);
+            Pump(window.Dispatcher, 900);
+            Check("a rebuild and a theme change keep the scroll", Math.Abs(window.ScrollOffset - raceAt) < 4,
+                $"{raceAt:0} -> {window.ScrollOffset:0}");
+            settings.Theme = wasDark ? ColorMode.Dark : ColorMode.Light;
+            Theme.Attach(settings);
+            Pump(window.Dispatcher, 700);
+            Check("and the page is intact afterwards", Count<RadioButton>(window) >= 15,
+                $"{Count<RadioButton>(window)} pills");
+            window.ScrollToY(0);
+            Pump(window.Dispatcher, 300);
 
             // Dragging selects the corner that was dropped nearest; check the mapping itself.
             var area = new Rect(0, 0, 400, 600);
@@ -421,6 +509,51 @@ public static class Snapshots
             File.WriteAllText(reportPath, report);
         }
         return problems == 0 ? 0 : 1;
+    }
+
+    /// <summary>Bounding box of everything that is not the plate's flat background.</summary>
+    static (double Left, double Top, double Right, double Bottom) InkBounds(BitmapSource bitmap)
+    {
+        var stride = bitmap.PixelWidth * 4;
+        var pixels = new byte[stride * bitmap.PixelHeight];
+        bitmap.CopyPixels(pixels, stride, 0);
+        // The plate is painted with one flat colour, so the first pixel is a safe background key.
+        byte br = pixels[0], bg = pixels[1], bb = pixels[2];
+        int minX = bitmap.PixelWidth, minY = bitmap.PixelHeight, maxX = -1, maxY = -1;
+        for (var y = 0; y < bitmap.PixelHeight; y++)
+        {
+            for (var x = 0; x < bitmap.PixelWidth; x++)
+            {
+                var i = y * stride + x * 4;
+                if (Math.Abs(pixels[i] - br) < 10 && Math.Abs(pixels[i + 1] - bg) < 10 && Math.Abs(pixels[i + 2] - bb) < 10)
+                    continue;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
+        }
+        return maxX < 0
+            ? (0, 0, bitmap.PixelWidth, bitmap.PixelHeight)
+            : (minX, minY, maxX + 1, maxY + 1);
+    }
+
+    /// <summary>Every descendant of a type, for driving real controls from a test.</summary>
+    static List<T> FindAll<T>(DependencyObject root) where T : DependencyObject
+    {
+        var found = new List<T>();
+        void Walk(DependencyObject node)
+        {
+            var children = VisualTreeHelper.GetChildrenCount(node);
+            for (var i = 0; i < children; i++)
+            {
+                var child = VisualTreeHelper.GetChild(node, i);
+                if (child is T hit) found.Add(hit);
+                Walk(child);
+            }
+        }
+        Walk(root);
+        return found;
     }
 
     /// <summary>The first descendant of a type, for inspecting a built card.</summary>

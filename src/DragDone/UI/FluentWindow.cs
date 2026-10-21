@@ -20,9 +20,14 @@ public class FluentWindow : Window
 
     static ImageSource LoadIcon()
     {
-        var img = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/DragDone.ico", UriKind.Absolute));
-        img.Freeze();
-        return img;
+        // An .ico holds one image per size and the first frame is the smallest. Picking that one
+        // and letting WPF stretch it to 40px is what made the logo in Settings look soft.
+        var decoder = BitmapDecoder.Create(
+            new Uri("pack://application:,,,/Assets/DragDone.ico", UriKind.Absolute),
+            BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        var largest = decoder.Frames.OrderByDescending(f => f.PixelWidth).First();
+        largest.Freeze();
+        return largest;
     }
 
     public FluentWindow()
@@ -81,10 +86,18 @@ public class FluentWindow : Window
     /// <summary>Title bar, controls and window material follow the current palette.</summary>
     void SystemChrome()
     {
-        ThemeMode = Theme.Current.IsDark ? ThemeMode.Dark : ThemeMode.Light;
+        // Only the two things below affect the window chrome. Re-applying them on every palette
+        // change re-templates the window for nothing, which is what made dragging a slider stutter.
+        var mode = Theme.Current.IsDark ? ThemeMode.Dark : ThemeMode.Light;
+        var material = (Theme.Current.IsDark, Theme.Current.Translucent);
+        if (ThemeMode == mode && _material == material) return;
+        _material = material;
+        if (ThemeMode != mode) ThemeMode = mode;
         if (new WindowInteropHelper(this).Handle is var hwnd && hwnd != IntPtr.Zero && IsLoaded) Apply(hwnd);
         else SourceInitialized += (_, _) => Apply(new WindowInteropHelper(this).Handle);
     }
+
+    (bool Dark, bool Translucent)? _material;
 
     void Apply(IntPtr hwnd)
     {

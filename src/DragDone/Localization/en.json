@@ -65,6 +65,7 @@
   "error.imageDecode": "Could not read the image; its codec extension may be missing.",
   "error.io": "Could not access the file.",
   "error.noAudio": "The clip has no audio.",
+  "error.noVideo": "The file has no video track.",
   "error.office": "Office could not convert the file.",
   "error.pdfOpen": "Could not open the PDF; it may be password-protected.",
   "error.share": "The share sheet is not available on this PC.",

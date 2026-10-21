@@ -12,7 +12,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>DragDone</AssemblyName>
     <RootNamespace>DragDone</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Product>DragDone</Product>
     <Company>Turki Alshaalan</Company>
     <Copyright>Copyright © 2026 Turki Alshaalan</Copyright>

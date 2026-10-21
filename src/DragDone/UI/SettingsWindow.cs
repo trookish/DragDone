@@ -52,6 +52,8 @@ public sealed class SettingsWindow : FluentWindow
     // is currently in flight (in which case the layout resets it causes are not real scrolls).
     double _lastOffset;
     bool _holdingScroll;
+    double _previewOffX;
+    double _previewOffY;
 
     // Swapped as a whole by each build: the page is only adopted once it is complete, and
     // these have to describe that page or the search filter would hide the wrong rows.
@@ -104,9 +106,10 @@ public sealed class SettingsWindow : FluentWindow
         _restyle = new DispatcherTimer(TimeSpan.FromMilliseconds(180), DispatcherPriority.Background, (_, _) => Restyle(), Dispatcher);
         _restyle.Stop();
 
-        _scroll.ScrollChanged += (_, _) =>
+        _scroll.ScrollChanged += (_, e) =>
         {
             if (!_holdingScroll) _lastOffset = _scroll.VerticalOffset;
+            Diag.Log($"scroll {_scroll.VerticalOffset:0}/{_scroll.ExtentHeight:0} dv={e.VerticalChange:0} hold={_holdingScroll} floating={_floatShown}");
             SyncFloatingPreview();
         };
         SizeChanged += (_, _) => { if (_floatShown) PlaceFloating(); };
@@ -129,8 +132,11 @@ public sealed class SettingsWindow : FluentWindow
     {
         // The chrome re-template wipes the scroll position before OnPaletteChanged runs, so park
         // it here and stop recording the resets until the page has been rebuilt.
-        _lastOffset = _scroll.VerticalOffset;
+        // Nothing to park if a restore is already in flight: the live offset is mid-reset then,
+        // and reading it would overwrite the position the user actually had with a zero.
+        if (!_holdingScroll) _lastOffset = _scroll.VerticalOffset;
         _holdingScroll = true;
+        Diag.Log($"scroll park {_lastOffset:0} (extent {_scroll.ExtentHeight:0}, view {_scroll.ViewportHeight:0})");
     }
 
     protected override void OnPaletteChanged()
@@ -204,6 +210,7 @@ public sealed class SettingsWindow : FluentWindow
         // Read the parked position, not the live one: a chrome change or an earlier rebuild may
         // have already reset it to the top, and that reset is not where the user was.
         var offset = _lastOffset;
+        Diag.Log($"rebuild start from {offset:0} (live {_scroll.VerticalOffset:0})");
         RunLoading(Build);
         // The new page starts with everything visible, so a typed search has to be put back.
         if (_search.Text.Length > 0) Filter(_search.Text);
@@ -221,11 +228,16 @@ public sealed class SettingsWindow : FluentWindow
         _holdingScroll = true;
         _scroll.UpdateLayout();
         _scroll.ScrollToVerticalOffset(offset);
+        // Trust the parked value, not the live one: a page that was just assigned reports no
+        // extent yet, so its offset reads zero until the layout pass below.
+        _lastOffset = offset;
+        Diag.Log($"restore sync {offset:0} -> {_scroll.VerticalOffset:0} (extent {_scroll.ExtentHeight:0})");
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
             _scroll.ScrollToVerticalOffset(offset);
             _lastOffset = _scroll.VerticalOffset;
             _holdingScroll = false;
+            Diag.Log($"restore deferred {offset:0} -> {_scroll.VerticalOffset:0} (extent {_scroll.ExtentHeight:0})");
             SyncFloatingPreview();
         }));
     }
@@ -235,7 +247,10 @@ public sealed class SettingsWindow : FluentWindow
     UIElement Header()
     {
         var header = new StackPanel { Orientation = Orientation.Horizontal };
-        header.Children.Add(new Image { Source = AppIcon, Width = 40, Height = 40, Margin = new Thickness(0, 0, 12, 0) });
+        var logo = new Image { Source = AppIcon, Width = 40, Height = 40, Margin = new Thickness(0, 0, 12, 0) };
+        // The icon is a 256px frame now; scaling it down smoothly is what keeps it sharp at 40px.
+        RenderOptions.SetBitmapScalingMode(logo, BitmapScalingMode.HighQuality);
+        header.Children.Add(logo);
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         titles.Children.Add(Heading("DragDone", 22));
         titles.Children.Add(Muted(Loc.T("app.tagline")));
@@ -288,11 +303,28 @@ public sealed class SettingsWindow : FluentWindow
     /// <summary>Applies the search filter, so a screenshot can show one section on its own.</summary>
     public void ApplyFilter(string query) => Filter(query);
 
+    /// <summary>Rebuilds the page now. Used by the self-test to exercise the scroll restore.</summary>
+    internal void RebuildNow() => Rebuild();
+
     /// <summary>How far the page is scrolled. Used by the self-test and by scrolled captures.</summary>
     internal double ScrollOffset => _scroll.VerticalOffset;
 
     /// <summary>Whether the preview is currently floating over the page.</summary>
     internal bool FloatingPreviewShown => _floatShown;
+
+    /// <summary>The bitmap the preview currently shows, for checking it is centred and unfilled.</summary>
+    internal BitmapSource? PreviewSource => _previewInline.Source as BitmapSource;
+
+    /// <summary>Redraws the preview now, without waiting for the debounce timer.</summary>
+    internal void RedrawPreview() => DrawPreview();
+
+    /// <summary>How far the ring's centre sat from the bitmap's centre on the last draw.</summary>
+    internal double PreviewOffX => _previewOffX;
+    internal double PreviewOffY => _previewOffY;
+
+    /// <summary>The same colour, painted solid. A preview plate or a floating card that lets the
+    /// rows behind it ghost through looks torn rather than floating.</summary>
+    static Color Opaque(Color c) => Color.FromArgb(0xFF, c.R, c.G, c.B);
 
     /// <summary>Moves the page and settles the floating preview, for captures and the self-test.</summary>
     internal void ScrollToY(double offset)
@@ -737,24 +769,38 @@ public sealed class SettingsWindow : FluentWindow
         var image = new Image
         {
             Stretch = Stretch.Uniform,
-            Height = 236,
+            // Square, because the ring is square. A wide plate around a square ring is all empty
+            // margin, which is what made the preview look small and off-centre in the page.
+            Width = 264,
+            Height = 264,
             HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Source = _previewInline.Source,
         };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
         _previewInline = image;
         var frame = new Border
         {
-            CornerRadius = new CornerRadius(10),
+            CornerRadius = new CornerRadius(14),
             Background = Theme.Brush(Theme.Current.SurfaceAlt),
             BorderBrush = Theme.Brush(Theme.Current.Stroke),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(6),
+            Padding = new Thickness(10),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            // The ring is drawn with padding already; clipping here would crop its outer labels.
+            ClipToBounds = false,
             Child = image,
         };
         var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = Loc.T("settings.preview"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 4), Foreground = Theme.Brush(Theme.Current.Text) });
+        stack.Children.Add(new TextBlock { Text = Loc.T("settings.preview"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 8), Foreground = Theme.Brush(Theme.Current.Text) });
         stack.Children.Add(frame);
-        stack.Children.Add(Muted(Loc.T("settings.preview.hint"), 11.5));
+        var hint = Muted(Loc.T("settings.preview.hint"), 11.5);
+        hint.TextAlignment = TextAlignment.Center;
+        hint.HorizontalAlignment = HorizontalAlignment.Center;
+        hint.MaxWidth = 420;
+        hint.TextWrapping = TextWrapping.Wrap;
+        hint.Margin = new Thickness(0, 8, 0, 0);
+        stack.Children.Add(hint);
         _searchable.Add((stack, Loc.T("settings.preview") + " preview"));
         // Remembered so the floating copy knows when this one has been scrolled out of sight.
         _previewSlot = stack;
@@ -773,9 +819,18 @@ public sealed class SettingsWindow : FluentWindow
         {
             Text = Loc.T("settings.preview.drag"),
             FontSize = 10.5,
-            Margin = new Thickness(2, 5, 2, 0),
+            Margin = new Thickness(0, 6, 0, 1),
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
             Foreground = Theme.Brush(Theme.Current.TextDim),
         };
+        // Square and a little larger than the old slot, so the ring reads at a glance rather than
+        // sitting in a strip of empty card.
+        _previewFloat.Width = 214;
+        _previewFloat.Height = 214;
+        _previewFloat.Stretch = Stretch.Uniform;
+        _previewFloat.HorizontalAlignment = HorizontalAlignment.Center;
+        RenderOptions.SetBitmapScalingMode(_previewFloat, BitmapScalingMode.HighQuality);
         var content = new StackPanel();
         content.Children.Add(_previewFloat);
         content.Children.Add(hint);
@@ -783,13 +838,16 @@ public sealed class SettingsWindow : FluentWindow
         var card = new Border
         {
             Child = content,
-            Width = 236,
             Padding = new Thickness(7, 7, 7, 6),
             CornerRadius = new CornerRadius(12),
-            Background = Theme.Brush(Theme.Current.Surface),
+            // Solid, not the window's translucent surface: rows scrolling underneath must not
+            // ghost through the preview and make it look torn.
+            Background = Theme.Brush(Opaque(Theme.Current.Surface)),
             BorderBrush = Theme.Brush(Theme.Current.Stroke),
             BorderThickness = new Thickness(1),
             RenderTransform = _slide,
+            // The drop shadow must be free to spill; the ring inside already carries its padding.
+            ClipToBounds = false,
             Cursor = Cursors.SizeAll,
             Effect = new DropShadowEffect
             {
@@ -893,8 +951,12 @@ public sealed class SettingsWindow : FluentWindow
     Point DockPoint()
     {
         var area = ScrollArea();
-        var width = _floatCard.ActualWidth > 0 ? _floatCard.ActualWidth : _floatCard.Width;
-        var height = _floatCard.ActualHeight > 0 ? _floatCard.ActualHeight : 200;
+        // Measure first: the card hugs its content now, so its size is only known after a pass.
+        _floatCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var width = _floatCard.ActualWidth > 0 ? _floatCard.ActualWidth : _floatCard.DesiredSize.Width;
+        var height = _floatCard.ActualHeight > 0 ? _floatCard.ActualHeight : _floatCard.DesiredSize.Height;
+        if (double.IsNaN(width) || width <= 0) width = 230;
+        if (double.IsNaN(height) || height <= 0) height = 250;
         const double gap = 16;
         var onRight = _s.PreviewDock is PreviewCorner.TopRight or PreviewCorner.BottomRight;
         var atBottom = _s.PreviewDock is PreviewCorner.BottomLeft or PreviewCorner.BottomRight;
@@ -997,15 +1059,37 @@ public sealed class SettingsWindow : FluentWindow
             menu.Measure(new Size(size, size));
             menu.Arrange(new Rect(0, 0, size, size));
             menu.UpdateLayout();
+
+            // The ring sits at the exact centre of its square, and every label hangs off it. Take
+            // the largest reach in any direction so nothing is cut, then place the ring itself dead
+            // centre: centring the ink instead would shift the ring, because the labels are not
+            // evenly distributed around it.
+            var bounds = VisualTreeHelper.GetDescendantBounds(menu);
+            if (bounds.IsEmpty) bounds = new Rect(0, 0, size, size);
+            var centre = size / 2;
+            const double pad = 12;
+            var half = Math.Max(
+                Math.Max(centre - bounds.X, bounds.Right - centre),
+                Math.Max(centre - bounds.Y, bounds.Bottom - centre));
+            var side = Math.Max(1, half * 2 + pad * 2);
+            var shift = new TranslateTransform(side / 2 - centre, side / 2 - centre);
+            // Remembered so a test can assert that the ring's centre lands on the bitmap's centre.
+            _previewOffX = Math.Abs(shift.X + centre - side / 2);
+            _previewOffY = Math.Abs(shift.Y + centre - side / 2);
+            Diag.Log($"preview size={size:0} bounds={bounds.X:0},{bounds.Y:0} {bounds.Width:0}x{bounds.Height:0} side={side:0}");
+
+            var plate = new DrawingVisual();
+            using (var dc = plate.RenderOpen())
+                dc.DrawRectangle(Theme.Brush(Opaque(Theme.Current.SurfaceAlt)), null, new Rect(0, 0, side, side));
+            var shifted = new ContainerVisual { Transform = shift };
+            shifted.Children.Add(menu);
+            var composed = new ContainerVisual();
+            composed.Children.Add(plate);
+            composed.Children.Add(shifted);
+
             var dpi = VisualTreeHelper.GetDpi(this);
-            var bitmap = new RenderTargetBitmap((int)(size * dpi.DpiScaleX), (int)(size * dpi.DpiScaleY), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
-            var root = new DrawingVisual();
-            using (var dc = root.RenderOpen())
-            {
-                dc.DrawRectangle(Theme.Brush(Theme.Current.SurfaceAlt), null, new Rect(0, 0, size, size));
-                dc.DrawRectangle(new VisualBrush(menu) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(0, 0, size, size));
-            }
-            bitmap.Render(root);
+            var bitmap = new RenderTargetBitmap((int)(side * dpi.DpiScaleX), (int)(side * dpi.DpiScaleY), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
+            bitmap.Render(composed);
             bitmap.Freeze();
             _previewInline.Source = bitmap;
             _previewFloat.Source = bitmap;

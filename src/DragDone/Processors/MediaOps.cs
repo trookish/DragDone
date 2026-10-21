@@ -53,6 +53,7 @@ public static partial class MediaOps
 
     public static string ExtractAudio(string source, JobContext ctx)
     {
+        EnsureAudio(source, ctx);
         var info = Ffmpeg.Probe(ctx, source);
         var m = AudioCodecRx().Match(info);
         if (!m.Success) throw new UserFacingException(Localization.Loc.T("error.noAudio"));
@@ -76,6 +77,7 @@ public static partial class MediaOps
 
     public static string Mute(string source, JobContext ctx)
     {
+        EnsureVideo(source, ctx);
         var output = OutputPaths.For(source, Path.GetExtension(source), "suffix.muted");
         Ffmpeg.Run(ctx, new[] { "-i", source, "-map", "0:v", "-c:v", "copy", "-an", output }, output);
         return output;
@@ -83,6 +85,7 @@ public static partial class MediaOps
 
     public static string Compress(string source, string level, JobContext ctx)
     {
+        EnsureVideo(source, ctx);
         var (crf, audio) = level switch
         {
             "light" => ("24", "128k"),
@@ -100,6 +103,7 @@ public static partial class MediaOps
 
     public static string Resize(string source, int height, JobContext ctx)
     {
+        EnsureVideo(source, ctx);
         var output = OutputPaths.For(source, "mp4", null, $"{height}p");
         Ffmpeg.Run(ctx, new[]
         {
@@ -111,6 +115,7 @@ public static partial class MediaOps
 
     public static string Rotate(string source, int degrees, JobContext ctx)
     {
+        EnsureVideo(source, ctx);
         var filter = degrees switch
         {
             90 => "transpose=1",
@@ -128,6 +133,7 @@ public static partial class MediaOps
 
     public static string Snapshot(string source, JobContext ctx)
     {
+        EnsureVideo(source, ctx);
         var output = OutputPaths.For(source, "png", "suffix.frame");
         // Skip the first second (often black) when the clip is long enough; fall back to frame 0.
         try
@@ -156,6 +162,7 @@ public static partial class MediaOps
 
     public static string CompressAudio(string source, JobContext ctx)
     {
+        EnsureAudio(source, ctx);
         var token = SameAudioToken(source);
         // Lossless sources become AAC: re-encoding WAV to WAV cannot shrink it.
         if (token is "wav" or "flac") token = "m4a";
@@ -169,6 +176,7 @@ public static partial class MediaOps
 
     static string AudioFilter(string source, string filter, string suffixKey, JobContext ctx, params string[] extra)
     {
+        EnsureAudio(source, ctx);
         var token = SameAudioToken(source);
         var output = OutputPaths.For(source, token, suffixKey);
         var args = new List<string> { "-i", source, "-vn", "-map", "0:a:0" };
@@ -192,5 +200,42 @@ public static partial class MediaOps
 
     public static string Mono(string source, JobContext ctx) => AudioFilter(source, "", "suffix.mono", ctx, "-ac", "1");
 
-    public static bool HasVideo(JobContext ctx, string source) => VideoStreamRx().IsMatch(Ffmpeg.Probe(ctx, source));
+    public static bool HasVideo(JobContext ctx, string source) => VideoStreamRx().IsMatch(Probe(source, ctx));
+
+    /// <summary>
+    /// FFmpeg's own complaint about a missing stream ("Stream map '' matches no streams") is not
+    /// something to show a person. Check first and say what is actually wrong with the file.
+    /// </summary>
+    static void EnsureAudio(string source, JobContext ctx)
+    {
+        if (!AudioCodecRx().IsMatch(Probe(source, ctx)))
+            throw new UserFacingException(Localization.Loc.T("error.noAudio"));
+    }
+
+    static void EnsureVideo(string source, JobContext ctx)
+    {
+        if (!VideoStreamRx().IsMatch(Probe(source, ctx)))
+            throw new UserFacingException(Localization.Loc.T("error.noVideo"));
+    }
+
+    // Probing costs a process launch, and several operations ask the same question twice.
+    static readonly Dictionary<string, string> Probes = new(StringComparer.OrdinalIgnoreCase);
+
+    static string Probe(string source, JobContext ctx)
+    {
+        string stamp;
+        try
+        {
+            stamp = source + "|" + File.GetLastWriteTimeUtc(source).Ticks + "|" + new FileInfo(source).Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Ffmpeg.Probe(ctx, source);
+        }
+        if (Probes.TryGetValue(stamp, out var known)) return known;
+        var text = Ffmpeg.Probe(ctx, source);
+        if (Probes.Count > 64) Probes.Clear();
+        Probes[stamp] = text;
+        return text;
+    }
 }

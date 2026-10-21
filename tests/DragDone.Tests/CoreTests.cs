@@ -242,6 +242,54 @@ public class PayloadAndCatalogTests
     }
 
     [Fact]
+    public void Ffmpeg_launches_from_a_directory_that_exists()
+    {
+        // The installer used to start the app from its temp folder, which is deleted on exit.
+        // Children inherit the working directory, so the launch failed with "the directory name is
+        // invalid" and every video and audio job died. Whatever we are handed, use a real folder.
+        var doomed = Path.Combine(Path.GetTempPath(), "dragdone-gone-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(doomed);
+        var missing = Path.Combine(doomed, "clip.mp4");
+        Directory.Delete(doomed);
+
+        var fromMissingFolder = DragDone.Processors.Ffmpeg.SafeWorkingDirectory(missing);
+        Assert.True(Directory.Exists(fromMissingFolder), fromMissingFolder);
+
+        var plain = DragDone.Processors.Ffmpeg.SafeWorkingDirectory(null);
+        Assert.True(Directory.Exists(plain), plain);
+
+        // A folder that does exist is kept: the work happens beside the output.
+        var keep = Path.Combine(Path.GetTempPath(), "dragdone-here-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(keep);
+        try
+        {
+            Assert.Equal(keep, DragDone.Processors.Ffmpeg.SafeWorkingDirectory(Path.Combine(keep, "out.mp4")));
+        }
+        finally
+        {
+            Directory.Delete(keep);
+        }
+    }
+
+    [Fact]
+    public void Missing_tracks_are_explained_in_words()
+    {
+        Loc.Set("en");
+        Assert.Equal("The clip has no audio.", Loc.T("error.noAudio"));
+        Assert.Equal("The file has no video track.", Loc.T("error.noVideo"));
+        Loc.Set("ar");
+        try
+        {
+            Assert.Equal("لا يحتوي المقطع على صوت.", Loc.T("error.noAudio"));
+            Assert.Equal("لا يحتوي الملف على مسار فيديو.", Loc.T("error.noVideo"));
+        }
+        finally
+        {
+            Loc.Set("en");
+        }
+    }
+
+    [Fact]
     public void Resolve_falls_back_to_a_tab_with_actions()
     {
         var p = new DragPayload(new[] { "data.bin" });
