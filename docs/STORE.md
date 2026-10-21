@@ -24,9 +24,18 @@ and packs it with `MakeAppx` from the Windows SDK (any version under
 
 ## Before you can submit
 
-1. **Reserve the name in Partner Center.** You get three identity values: *Package/Identity/Name*
-   (like `1234Publisher.DragDone`), *Package/Identity/Publisher* (a `CN=` string with your Partner
-   Center publisher ID), and *Publisher display name*. Put them in `packaging/identity.json`:
+0. **Open an individual developer account — it is free.** Individual registration no longer carries
+   the old $19 fee: go to <https://storedeveloper.microsoft.com>, choose *Individual developer
+   (free)*, sign in with the Microsoft account you intend to keep, verify your identity with a
+   government ID plus a selfie on a phone, and you land in Partner Center. A Company account costs
+   money and is only needed if you are publishing as a business.
+
+1. **Reserve the name in Partner Center.** Apps and games → **New product** → **MSIX or PWA app**
+   (not *Game*). Check availability for `DragDone`, then **Reserve product name**. An unused
+   reservation expires after three months.
+
+2. **Copy the three identity values** from the product's **Product identity** page and put them in
+   `packaging/identity.json`:
 
    ```json
    {
@@ -37,16 +46,21 @@ and packs it with `MakeAppx` from the Windows SDK (any version under
    ```
 
    The values currently in that file (`DragDone.Dev`, `CN=DragDone Dev`) are development
-   placeholders and will be rejected. The publisher in the manifest must match the certificate
-   Partner Center issues for you, character for character.
+   placeholders and will be rejected. The manifest's `Name` must equal the reserved identity name
+   exactly, and `Publisher` must equal the `CN=` value character for character — that is the
+   certificate Partner Center issues when it signs your package.
 
-2. **Keep the version in step with `DragDone.csproj`.** The manifest version is generated from it as
+3. **Keep the version in step with `DragDone.csproj`.** The manifest version is generated from it as
    a four-part number (`1.1.0` becomes `1.1.0.0`). A submission must have a higher version than the
    package already in the Store.
 
-3. **Upload the unsigned `.msix`.** Partner Center accepts a single-architecture `.msix` directly;
-   it re-signs the package for distribution. Submit the `msix` artifact that CI attaches to the
-   release instead of your local build, so the store copy matches the tagged source.
+4. **Upload the unsigned `.msix`.** Partner Center accepts a single-architecture `.msix` directly
+   (`.msixupload` is only the container Visual Studio builds around a bundle plus symbols) and
+   re-signs the package for distribution. Submit the `msix` artifact CI attached to the release, not
+   your local build, so the Store copy matches the tagged source.
+
+5. **Have one desktop screenshot at 1366×768 or larger.** PNG, landscape or portrait, up to 10 of
+   them; the repo's README captures are smaller than that and cannot be used as-is.
 
 ## Verifying a package before submitting
 
