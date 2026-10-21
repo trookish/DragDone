@@ -126,6 +126,36 @@ the outside:
 renders by `python packaging/make_store_screenshots.py` — regenerate it after a visual change rather
 than uploading stale art. `docs/images/` holds the README captures, which are too small for the Store.
 
+## Restricted capability: `runFullTrust`
+
+Uploading the package shows this warning during validation:
+
+> Package acceptance validation warning: The following restricted capabilities require approval
+> before you can use them in your app: runFullTrust.
+
+It is a warning, not a failure, and it is unavoidable for this app: a WPF process at medium
+integrity level (mediumIL) must declare `runFullTrust`, and `MakeAppx` refuses to build the package
+without it. Do not delete the capability to silence the warning — the tray icon, the shell drag hook,
+the overlay and the child conversion processes all depend on it.
+
+Approval is collected during certification: paste the text below into the submission's
+**Submission options** page (the page that appears after the restricted capability is detected) and
+keep it consistent with the certification notes.
+
+> DragDone is a Win32/WPF desktop utility packaged with the MSIX desktop bridge; it is not a UWP app,
+> so it declares `runFullTrust` to run at medium integrity alongside the user's own session. It needs
+> full trust for four things that an AppContainer cannot do: (1) a notification-area (tray) presence
+> that survives Explorer restarts; (2) a low-level mouse hook used solely to notice the start of a
+> file drag, so the action ring can appear — no keystrokes are recorded and no input is injected;
+> (3) a non-activating WPF overlay window drawn over the desktop; (4) starting local conversion
+> engines as child processes (a user-installed `ffmpeg.exe`, and Microsoft Office automation when
+> Office is present) for the files the user drags onto the app. All processing is local: the app
+> opens no network connections, collects no telemetry, has no accounts and writes results beside the
+> original file without overwriting it. The same executable is also distributed as a full-trust
+> installer outside the Store, which is why the capability is declared in the package manifest.
+
+Sideloading such a package needs no approval; only Store submission does.
+
 ## What the Store package still depends on
 
 - **FFmpeg** is not bundled. Store users without it get the localized dependency message. Bundling
