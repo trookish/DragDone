@@ -9,6 +9,10 @@ First public release.
 
 ### Added
 
+- **A one-file installer.** `DragDone-1.0.0-setup.exe` installs the app and the .NET runtime it needs
+  in one step, per user and without an administrator prompt, or for all users if you prefer. It adds
+  a Start Menu shortcut, registers in Apps & features, and its uninstall stops the tray app, removes
+  the startup entry and asks before touching your settings. The wizard ships in English and Arabic.
 - **Radial menu on a drag.** Hold a file drag on the Desktop or in File Explorer, press the Convert,
   Tools or Actions key, and a menu opens under the cursor with the actions for those files. Releasing
   over an action runs it.

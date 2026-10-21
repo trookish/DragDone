@@ -3,6 +3,7 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -35,3 +36,44 @@ jobs:
           name: selftest-report
           path: selftest-*.txt
           if-no-files-found: ignore
+
+  # A tag builds the installer and hangs it on the release, so the download is always compiled from
+  # the tagged source rather than from someone's desktop.
+  installer:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build the installer
+        run: pwsh tools/build_installer.ps1
+
+      - name: Attach it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          asset=$(ls artifacts/DragDone-*-setup.exe)
+          echo "built $asset"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" \
+              --title "DragDone ${GITHUB_REF_NAME#v}" --generate-notes
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer
+          path: artifacts/DragDone-*-setup.exe

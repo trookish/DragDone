@@ -178,10 +178,20 @@ instead of disappearing.
 
 ## Get it
 
-Download **[DragDone 1.0.0](https://github.com/trookish/DragDone/releases/latest)** (7 MB zip),
-extract it, and run `DragDone.exe`. It starts in the system tray — there is no main window, on
-purpose. Needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0);
-build it self-contained instead if you would rather not install that.
+Download **[DragDone 1.0.0 setup](https://github.com/trookish/DragDone/releases/latest)** and run it.
+The installer carries everything the app needs — including the .NET runtime — so there is nothing
+else to download first.
+
+- Installs for the current user, so **no administrator prompt**. Choose an all-users install in the
+  wizard if you would rather.
+- Lands in `%LOCALAPPDATA%\Programs\DragDone`, adds a Start Menu shortcut (a desktop one is
+  optional), and appears in **Apps & features** for a clean uninstall.
+- Uninstalling stops the tray app, removes its startup entry, and asks before deleting your
+  settings.
+- The wizard is translated: English and العربية.
+
+Prefer not to install? A self-contained publish is a single folder you can run from anywhere — see
+[Build and run](#build-and-run).
 
 The first run opens a card with the three keys and where to change them:
 
@@ -219,6 +229,16 @@ and comes to about 200 MB.
 dotnet publish src/DragDone -c Release -r win-x64 --self-contained false -o artifacts/publish   # needs the .NET 10 Desktop Runtime
 dotnet publish src/DragDone -c Release -r win-x64 --self-contained -o artifacts/publish         # runs anywhere
 ```
+
+The installer. It publishes the self-contained build and compiles `installer/DragDone.iss` into one
+setup file; the version comes from the csproj.
+
+```bash
+pwsh tools/build_installer.ps1            # artifacts\DragDone-1.0.0-setup.exe
+```
+
+Needs [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`). Tagging
+a release builds the same file in CI and attaches it to the release.
 
 Command-line modes, useful for scripting and verification:
 
@@ -277,7 +297,8 @@ src/DragDone/
   UI/            overlay, radial menu, theme engine, settings, welcome, crop, rename, shelf
   Localization/  ar.json, en.json, Loc
 tests/DragDone.Tests/
-tools/           icon generator, smoke test, window capture, end-to-end drag harness
+installer/       Inno Setup script for the release installer
+tools/           icon generator, smoke test, window capture, installer build, end-to-end drag harness
 docs/            ARCHITECTURE.md, THEMES.md, images
 ```
 
