@@ -45,10 +45,12 @@ and packs it with `MakeAppx` from the Windows SDK (any version under
    }
    ```
 
-   The values currently in that file (`DragDone.Dev`, `CN=DragDone Dev`) are development
-   placeholders and will be rejected. The manifest's `Name` must equal the reserved identity name
-   exactly, and `Publisher` must equal the `CN=` value character for character — that is the
-   certificate Partner Center issues when it signs your package.
+   The values in that file are the ones Partner Center assigned to this product
+   (`trookish.DragDone`, `CN=9121850F-2302-4F5F-8644-8CDC73A97BA8`). The manifest's `Name` must
+   equal the reserved identity name exactly, and `Publisher` must equal the `CN=` value character
+   for character — that is the certificate Partner Center issues when it signs your package. If the
+   product is ever moved to a Company account, these three values change and the package has to be
+   rebuilt.
 
 3. **Keep the version in step with `DragDone.csproj`.** The manifest version is generated from it as
    a four-part number (`1.1.0` becomes `1.1.0.0`). A submission must have a higher version than the

@@ -45,6 +45,8 @@ function Check([string]$name, [bool]$ok, [string]$detail = '') {
 }
 
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$identityJson = Get-Content (Join-Path $root 'packaging\identity.json') -Raw | ConvertFrom-Json
+$identityName = $identityJson.identityName
 $hadRunKey = $null -ne (Get-ItemProperty -Path $runKey -Name DragDone -ErrorAction SilentlyContinue)
 if ($hadRunKey) { Remove-ItemProperty -Path $runKey -Name DragDone -Force }
 
@@ -81,7 +83,7 @@ try {
 
     # 2. Install.
     Add-AppxPackage -Path $Package -ForceApplicationShutdown
-    $pkg = Get-AppxPackage | Where-Object { $_.Name -eq 'DragDone.Dev' }
+    $pkg = Get-AppxPackage | Where-Object { $_.Name -eq $identityName }
     Check 'package installed from the .msix' ($null -ne $pkg) $pkg.PackageFullName
     $pfn = $pkg.PackageFamilyName
 
@@ -147,7 +149,7 @@ finally {
     Get-Process -Name DragDone -ErrorAction SilentlyContinue | Stop-Process -Force
     if ($pkg) {
         Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue
-        Check 'package uninstalled' ($null -eq (Get-AppxPackage | Where-Object { $_.Name -eq 'DragDone.Dev' }))
+        Check 'package uninstalled' ($null -eq (Get-AppxPackage | Where-Object { $_.Name -eq $identityName }))
         $pfn = $pkg.PackageFamilyName
         Check 'virtualised settings removed' (-not (Test-Path (Join-Path $env:LOCALAPPDATA "Packages\$pfn")))
     }

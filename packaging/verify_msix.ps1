@@ -18,6 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$identityName = (Get-Content (Join-Path $root 'packaging\identity.json') -Raw | ConvertFrom-Json).identityName
 if (-not $Package) {
     $Package = Get-ChildItem (Join-Path $root 'artifacts') -Filter 'DragDone-*-x64.msix' |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
@@ -58,11 +59,11 @@ if (-not $installed) {
         Sort-Object Name -Descending | Select-Object -First 1
     if (-not $layout) { throw 'no layout folder to register; rebuild with tools/build_msix.ps1' }
     Write-Host "  (package not installable without elevation; registering $($layout.FullName))"
-    Get-AppxPackage | Where-Object { $_.Name -eq 'DragDone.Dev' } | Remove-AppxPackage -ErrorAction SilentlyContinue
+    Get-AppxPackage | Where-Object { $_.Name -eq $identityName } | Remove-AppxPackage -ErrorAction SilentlyContinue
     Add-AppxPackage -Register (Join-Path $layout.FullName 'AppxManifest.xml') -ForceApplicationShutdown
     Check 'layout registered with package identity' $true 'developer-mode registration'
 }
-$pkg = Get-AppxPackage | Where-Object { $_.Name -eq 'DragDone.Dev' }
+$pkg = Get-AppxPackage | Where-Object { $_.Name -eq $identityName }
 Check 'package installed' ($null -ne $pkg) $($pkg.PackageFullName)
 $pfn = $pkg.PackageFamilyName
 
@@ -119,7 +120,7 @@ if (Test-Path $ffmpeg) {
 Get-Process -Name DragDone -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 1
 Remove-AppxPackage -Package $pkg.PackageFullName
-Check 'package uninstalled' ($null -eq (Get-AppxPackage | Where-Object { $_.Name -eq 'DragDone.Dev' }))
+Check 'package uninstalled' ($null -eq (Get-AppxPackage | Where-Object { $_.Name -eq $identityName }))
 Check 'virtualised settings removed with it' (-not (Test-Path (Join-Path $env:LOCALAPPDATA "Packages\$pfn")))
 if ($hadRunKey) { Write-Host '  (installer channel Run key was cleared for the test)' }
 

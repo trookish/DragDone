@@ -3,6 +3,17 @@
 All notable changes to DragDone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-10-21
+
+### Changed
+
+- The package is built with the real Partner Center identity (`trookish.DragDone`,
+  `CN=9121850F-2302-4F5F-8644-8CDC73A97BA8`), so the artifact attaches to a release ready to upload
+  to the Store. The verification scripts read the identity from `packaging/identity.json` instead of
+  a hard-coded development name.
+- Verified on the packaged app: installs as `trookish.DragDone_1.1.1.0_x64__zr0xas6pssvja`, reports
+  `packaged = True` and `startup = startupTask=Enabled`, runs an FFmpeg job, and uninstalls clean.
+
 ## [1.1.0] — 2026-10-21
 
 ### Added
