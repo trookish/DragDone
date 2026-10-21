@@ -1,0 +1,15 @@
+# Normalise text files, keep binaries alone.
+* text=auto
+
+*.cs    text diff=csharp
+*.xaml  text
+*.json  text
+*.md    text
+*.yml   text
+*.sln   text eol=crlf
+*.sh    text eol=lf
+
+*.png   binary
+*.ico   binary
+*.exe   binary
+*.dll   binary

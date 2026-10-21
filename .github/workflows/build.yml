@@ -1,0 +1,37 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build DragDone.sln -c Release --nologo
+
+      - name: Test
+        run: dotnet test DragDone.sln -c Release --no-build --nologo --logger "console;verbosity=normal"
+
+      # The windows are checked in-process: no screen, no pointer, no focus.
+      - name: Settings window
+        run: .\src\DragDone\bin\Release\net10.0-windows10.0.19041.0\DragDone.exe --selftest settings --out selftest-settings.txt
+
+      - name: Shelf window
+        run: .\src\DragDone\bin\Release\net10.0-windows10.0.19041.0\DragDone.exe --selftest shelf --out selftest-shelf.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-report
+          path: selftest-*.txt
+          if-no-files-found: ignore
