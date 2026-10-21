@@ -3,6 +3,16 @@
 All notable changes to DragDone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-10-21
+
+### Fixed
+
+- Uninstalling no longer has any way to delete your settings and theme without being asked. In
+  unattended mode Inno Setup's plain `MsgBox` answers "Yes" to its own question, so a silent
+  uninstall used to clear `%APPDATA%\DragDone` — which is also what `winget uninstall` would have
+  done. The question now uses `SuppressibleMsgBox` with "No" as its unattended answer, so settings
+  survive unless someone clicks Yes.
+
 ## [1.0.1] — 2026-10-21
 
 ### Fixed

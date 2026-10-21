@@ -114,9 +114,11 @@ begin
   RemoveStartupEntry;
 
   { Settings live outside the install folder and survive by default. Offer to clear them. }
+  { SuppressibleMsgBox, not MsgBox: in unattended mode MsgBox answers IDYES, which would have }
+  { deleted the user's settings during a silent uninstall. This one answers its own default. }
   DataDir := ExpandConstant('{userappdata}\DragDone');
   if DirExists(DataDir) then
-    if MsgBox('Remove your DragDone settings and theme as well?' + #13#10 + #13#10 +
-              DataDir, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    if SuppressibleMsgBox('Remove your DragDone settings and theme as well?' + #13#10 + #13#10 +
+              DataDir, mbConfirmation, MB_YESNO, IDNO) = IDYES then
       DelTree(DataDir, True, True, True);
 end;
