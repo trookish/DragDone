@@ -1,6 +1,7 @@
 # DragDone
 
 [![build](https://github.com/trookish/DragDone/actions/workflows/build.yml/badge.svg)](https://github.com/trookish/DragDone/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/trookish/DragDone?color=2ea44f)](https://github.com/trookish/DragDone/releases/latest)
 [![license: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
 ![platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)
 
@@ -143,6 +144,13 @@ instead of disappearing.
   megabytes of working set.
 - **Readable.** Its two settings files accept comments and trailing commas, and out-of-range values
   are clamped instead of trusted.
+
+## Get it
+
+Download **[DragDone 1.0.0](https://github.com/trookish/DragDone/releases/latest)** (7 MB zip),
+extract it, and run `DragDone.exe`. It starts in the system tray — there is no main window, on
+purpose. Needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0);
+build it self-contained instead if you would rather not install that.
 
 ## Requirements
 
