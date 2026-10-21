@@ -122,8 +122,9 @@ the outside:
 > Video and audio actions require a locally installed FFmpeg; the app never downloads it and shows a
 > localized explanation when it is missing.
 
-**Screenshots:** `docs/images/en-settings.png`, `docs/images/ar-settings.png`, plus the tray menu and
-a radial menu capture. Store requires at least one desktop screenshot at 1366×768 or larger.
+**Screenshots:** the 1920×1080 set in `packaging/StoreScreenshots/` is generated from the app's own
+renders by `python packaging/make_store_screenshots.py` — regenerate it after a visual change rather
+than uploading stale art. `docs/images/` holds the README captures, which are too small for the Store.
 
 ## What the Store package still depends on
 
