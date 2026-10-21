@@ -99,6 +99,28 @@ export and import.
 colour, sanitises key names against `Core/Keys.All`, and drops folders that no longer exist. A
 hand-edited file cannot put the app into an unusable state.
 
+## Two channels, one binary
+
+The installer build and the Store build differ in exactly one place: how the app is allowed to start
+with Windows.
+
+| | Installer (GitHub) | Store (MSIX) |
+|---|---|---|
+| Identity | none | `Windows.ApplicationModel.Package.Current` answers |
+| Startup | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` | a declared startup task, `TaskId = "DragDone"` |
+| Signing | none | Microsoft, at publishing time |
+| Updates | new release, reinstall | the Store |
+
+`Shell/PackageInfo` asks for the package once and caches the answer, treating the exceptions an
+unpackaged process can throw — `InvalidOperationException` from the projection, and
+`TypeLoadException`, `COMException` or `IOException` when it cannot resolve at all — as "no
+identity". `Shell/Startup` then either writes the Run key or asks the startup task to enable itself.
+`--identity` prints the result so a packaged run can be checked without reading logs.
+
+A packaged process also gets its `%APPDATA%` writes redirected into the package by Windows when the
+package declares that behaviour. The app asks for the folder the same way in both channels and never
+assumes which physical path it lands on, so a package that redirects and one that does not both work.
+
 ## Language
 
 `Localization/Loc` holds the catalogue and the current language. `Loc.IsRtl` decides the text

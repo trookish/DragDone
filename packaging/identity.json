@@ -1,0 +1,11 @@
+{
+  "_comment": "MSIX identity. Replace identityName/publisher/publisherDisplayName with the values from Partner Center (Product management > Product identity) before submitting to the Store. The dev values below are only for building and testing the package locally.",
+  "identityName": "DragDone.Dev",
+  "publisher": "CN=DragDone Dev",
+  "publisherDisplayName": "Turki Alshaalan",
+  "displayName": "DragDone",
+  "description": "Drag a file, press a key, pick an action. Images, PDFs, video and audio convert in place without overwriting anything.",
+  "architecture": "x64",
+  "minVersion": "10.0.17763.0",
+  "maxVersionTested": "10.0.22621.0"
+}

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Store manifest for the packaged channel. tools/build_msix.ps1 fills in the placeholders from
+     packaging/identity.json and the project version. The installer channel does not use this. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  IgnorableNamespaces="uap uap5 rescap desktop">
+
+  <Identity
+    Name="__IDENTITY_NAME__"
+    Publisher="__PUBLISHER__"
+    Version="__VERSION__"
+    ProcessorArchitecture="__ARCHITECTURE__" />
+
+  <Properties>
+    <DisplayName>__DISPLAY_NAME__</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="__MIN_VERSION__" MaxVersionTested="__MAX_VERSION__" />
+  </Dependencies>
+
+  <!-- One language: the tile name is the same in Arabic and English, and all in-app text is
+       localised by the app itself rather than by package resources. -->
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="DragDone.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="__DISPLAY_NAME__"
+        Description="__DESCRIPTION__"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          ShortName="__DISPLAY_NAME__"
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Startup. A packaged app cannot use the HKCU Run key: writes there are virtualised into
+             the package and never read. Enabled="true" keeps the installer channel's default
+             (StartWithWindows = true) and leaves the user in control from Task Manager > Startup. -->
+        <uap5:Extension Category="windows.startupTask" Executable="DragDone.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="DragDone" Enabled="true" DisplayName="DragDone" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Full-trust desktop app: needed for the tray icon, the overlay window, the shell drag hooks
+         and the external FFmpeg/Office tools this app can drive. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

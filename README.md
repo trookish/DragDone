@@ -193,6 +193,13 @@ else to download first.
 Prefer not to install? A self-contained publish is a single folder you can run from anywhere — see
 [Build and run](#build-and-run).
 
+A **Microsoft Store package** is also built from the same source. It is the same tray app, signed by
+Microsoft instead of by nobody, and it updates itself through the Store. Submitting it needs a
+Partner Center identity — see [docs/STORE.md](docs/STORE.md) for the package, the verification script,
+and the listing text.
+
+DragDone does not collect anything or talk to the network: [PRIVACY.md](PRIVACY.md).
+
 The first run opens a card with the three keys and where to change them:
 
 <p>

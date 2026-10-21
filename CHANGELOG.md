@@ -3,6 +3,29 @@
 All notable changes to DragDone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-10-21
+
+### Added
+
+- **A Microsoft Store package.** `tools/build_msix.ps1` publishes the same app self-contained and
+  packs it as an MSIX with `MakeAppx`, and CI attaches `DragDone-<version>-x64.msix` to every release
+  next to the installer. The package is unsigned on purpose: Partner Center signs it during
+  publishing, which is how Store users avoid the SmartScreen prompt the GitHub installer shows.
+- **Packaged startup.** A Store build cannot rely on `HKCU\...\Run`, so it registers a Windows
+  startup task instead and reports its state through `--identity`. The installer build keeps using
+  the Run key.
+- **`--identity`** prints packaged status, package name and family, version, install folder, startup
+  mode, settings folder and executable path — the fastest way to see which channel is running.
+- **`packaging/verify_msix.ps1`** and the elevated variant install a package end to end, check
+  identity, the startup task, redirected settings and a real FFmpeg job, then uninstall and remove
+  the development certificate again.
+- [docs/STORE.md](docs/STORE.md) covers submission, and [PRIVACY.md](PRIVACY.md) states plainly that
+  nothing leaves the machine.
+
+### Changed
+
+- Startup registration checks for package identity before touching the registry.
+
 ## [1.0.2] — 2026-10-21
 
 ### Fixed

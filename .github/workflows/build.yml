@@ -77,3 +77,44 @@ jobs:
         with:
           name: installer
           path: artifacts/DragDone-*-setup.exe
+
+  # The Store package is built from the same source. It is deliberately unsigned: Partner Center
+  # signs it during publishing, and a self-signed signature would only be trusted on a dev machine.
+  store:
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build the MSIX
+        run: pwsh tools/build_msix.ps1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: msix
+          path: artifacts/DragDone-*-x64.msix
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          asset=$(ls artifacts/DragDone-*-x64.msix)
+          echo "built $asset"
+          # The installer job may be creating the release at the same moment; whoever wins, both
+          # upload to the same tag.
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "DragDone ${GITHUB_REF_NAME#v}" --generate-notes || true
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "$GITHUB_REF_NAME" "$asset" --clobber; then exit 0; fi
+            sleep 5
+          done
+          exit 1

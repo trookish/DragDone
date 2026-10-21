@@ -79,6 +79,30 @@ public partial class App : Application
             Shutdown(0);
             return;
         }
+        if (args.Length > 0 && args[0] == "--identity")
+        {
+            // Says whether this copy is packaged, what identity Windows gave it, and where its
+            // settings really live — packaged apps get a virtualised %APPDATA%, which is not the
+            // path the installer channel documents.
+            var packaged = Shell.PackageInfo.IsPackaged;
+            var lines = new List<string>
+            {
+                $"packaged       = {packaged}",
+                $"name           = {Shell.PackageInfo.Name ?? "(unpackaged)"}",
+                $"family         = {Shell.PackageInfo.FamilyName ?? "(unpackaged)"}",
+                $"version        = {Shell.PackageInfo.Version ?? "(unpackaged)"}",
+                $"install        = {Shell.PackageInfo.InstallLocation ?? AppContext.BaseDirectory}",
+                $"startup        = {Shell.Startup.Describe()}",
+                $"settings       = {Settings.Folder}",
+                $"executable     = {Environment.ProcessPath}",
+            };
+            var identityText = string.Join(Environment.NewLine, lines);
+            var identityTarget = Array.IndexOf(args, "--out") is var ii and > 0 && ii + 1 < args.Length ? args[ii + 1] : null;
+            if (identityTarget is not null) File.WriteAllText(identityTarget, identityText);
+            if (Native.Win32.AttachConsole(-1)) Console.WriteLine(identityText);
+            Shutdown(0);
+            return;
+        }
         if (args.Length > 1 && args[0] == "--show")
         {
             var capture = Array.IndexOf(args, "--capture") is var ci and > 0 && ci + 1 < args.Length ? args[ci + 1] : null;

@@ -272,6 +272,70 @@ public class PayloadAndCatalogTests
     }
 
     [Fact]
+    public void Store_manifest_carries_what_certification_looks_for()
+    {
+        // The manifest only exists as a template filled in at build time; these are the parts a
+        // missing edit would quietly break: full trust, a startup task instead of a Run key, and
+        // tile art that really is on disk.
+        var path = Repo.PathOf(@"packaging\AppxManifest.xml");
+        Assert.True(File.Exists(path), path);
+        var doc = System.Xml.Linq.XDocument.Load(path);
+        System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
+        System.Xml.Linq.XNamespace rescap = "http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities";
+        System.Xml.Linq.XNamespace uap5 = "http://schemas.microsoft.com/appx/manifest/uap/windows10/5";
+
+        var identity = doc.Root!.Element(ns + "Identity")!;
+        Assert.Equal("__IDENTITY_NAME__", identity.Attribute("Name")!.Value);
+        Assert.Equal("__PUBLISHER__", identity.Attribute("Publisher")!.Value);
+        Assert.Equal("__VERSION__", identity.Attribute("Version")!.Value);
+        Assert.Equal("__ARCHITECTURE__", identity.Attribute("ProcessorArchitecture")!.Value);
+
+        var device = doc.Root.Element(ns + "Dependencies")!.Element(ns + "TargetDeviceFamily")!;
+        Assert.Equal("Windows.Desktop", device.Attribute("Name")!.Value);
+        Assert.Equal("__MIN_VERSION__", device.Attribute("MinVersion")!.Value);
+
+        var app = doc.Root.Element(ns + "Applications")!.Element(ns + "Application")!;
+        Assert.Equal("DragDone.exe", app.Attribute("Executable")!.Value);
+        Assert.Equal("Windows.FullTrustApplication", app.Attribute("EntryPoint")!.Value);
+
+        var startup = app.Element(ns + "Extensions")!.Element(uap5 + "Extension")!;
+        Assert.Equal("windows.startupTask", startup.Attribute("Category")!.Value);
+        Assert.Equal("Windows.FullTrustApplication", startup.Attribute("EntryPoint")!.Value);
+        var task = startup.Element(uap5 + "StartupTask")!;
+        // Startup.TaskId in the app must be the same string, or the packaged build silently has
+        // no way to turn startup off.
+        Assert.Equal("DragDone", task.Attribute("TaskId")!.Value);
+        Assert.Equal("true", task.Attribute("Enabled")!.Value);
+
+        var capabilities = doc.Root.Element(ns + "Capabilities")!;
+        Assert.Equal("runFullTrust", capabilities.Element(rescap + "Capability")!.Attribute("Name")!.Value);
+
+        // Every image the manifest points at must exist, or packaging fails late and confusingly.
+        var assets = doc.Descendants()
+            .SelectMany(e => e.Attributes())
+            .Where(a => a.Name.LocalName.Contains("Logo", StringComparison.Ordinal))
+            .Select(a => a.Value.Replace('\\', Path.DirectorySeparatorChar))
+            .Distinct()
+            .ToList();
+        Assert.NotEmpty(assets);
+        foreach (var asset in assets)
+            Assert.True(File.Exists(Repo.PathOf(Path.Combine("packaging", asset))), asset);
+
+        var identityFile = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Repo.PathOf(@"packaging\identity.json")));
+        Assert.Equal("x64", identityFile.RootElement.GetProperty("architecture").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(identityFile.RootElement.GetProperty("publisherDisplayName").GetString()));
+    }
+
+    [Fact]
+    public void Tests_run_outside_a_package()
+    {
+        // If this ever fails, every Startup test would start writing to a virtualised store and
+        // the packaged-only branches would run silently on the build machine.
+        Assert.False(PackageInfo.IsPackaged);
+        Assert.Null(PackageInfo.FamilyName);
+    }
+
+    [Fact]
     public void Missing_tracks_are_explained_in_words()
     {
         Loc.Set("en");

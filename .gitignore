@@ -6,3 +6,7 @@ artifacts/
 TestResults/
 *.binlog
 .hermes/
+
+# Python caches from the asset generator
+__pycache__/
+*.pyc
