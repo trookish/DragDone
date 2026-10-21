@@ -100,12 +100,24 @@ The ring opens centred on the pointer, so Explorer's own drag ghost always cover
 file kind, size and count are therefore shown in a pill **above** the ring, where nothing overlaps
 it.
 
+<p>
+  <img src="docs/images/en-multi.png" width="520" alt="A batch of files, counted in a pill above the Tools ring">
+</p>
+
 A key that was already held when the drag began is treated as Explorer's own copy/move intent and
 does not open the menu; press it again to summon. Move away from the ring or press <kbd>Esc</kbd> to
 dismiss it, and the drag continues as a normal Explorer drag. Settings can also open the Convert
 menu when the cursor rests for a moment during a drag.
 
 ## Actions
+
+The same three rings for images, video, audio, PDFs, documents and archives — the Tools ring changes
+with what you are dragging:
+
+<p>
+  <img src="docs/images/en-tools.png" width="400" alt="Tools ring for a batch of files, English">
+  <img src="docs/images/ar-tools.png" width="400" alt="Tools ring, Arabic, right-to-left">
+</p>
 
 | Dragged | Convert (Convert key) | Tools (Tools key) |
 |---|---|---|
@@ -117,6 +129,13 @@ menu when the cursor rests for a moment during a drag.
 | Archives | — | Extract here |
 | Anything | — | Zip, SHA-256 hash |
 
+Crop and rename open a window of their own rather than a dialog:
+
+<p>
+  <img src="docs/images/en-crop.png" width="330" alt="Crop window">
+  <img src="docs/images/en-rename.png" width="330" alt="Rename window">
+</p>
+
 **Actions (Actions key)** apply to every type: Windows Share sheet (Nearby Sharing where enabled),
 move to Desktop / Documents / Downloads / Pictures / recent folders / a chosen folder, rename, copy
 path, open a terminal there, and a floating shelf that holds files until you drag them somewhere
@@ -125,8 +144,20 @@ the name, and a corner menu to open it, show it in Explorer, or remove it — an
 what you drag out.
 
 <p>
+  <img src="docs/images/en-actions.png" width="520" alt="The Actions ring: share, move, rename, terminal, shelf">
+</p>
+
+<p>
   <img src="docs/images/en-shelf.png" width="330" alt="Shelf, English, file cards in a grid">
   <img src="docs/images/ar-shelf.png" width="330" alt="Shelf, Arabic, right-to-left grid">
+</p>
+
+Every job ends in a result chip with **Undo**, **Open** and **Show in Explorer** — the files sit
+next to the original, never on top of it:
+
+<p>
+  <img src="docs/images/en-result.png" width="400" alt="Result chip, English">
+  <img src="docs/images/ar-result.png" width="400" alt="Result chip, Arabic">
 </p>
 
 The current format is shown dimmed. Actions that need a missing component stay visible and say why
@@ -151,6 +182,13 @@ Download **[DragDone 1.0.0](https://github.com/trookish/DragDone/releases/latest
 extract it, and run `DragDone.exe`. It starts in the system tray — there is no main window, on
 purpose. Needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0);
 build it self-contained instead if you would rather not install that.
+
+The first run opens a card with the three keys and where to change them:
+
+<p>
+  <img src="docs/images/en-welcome.png" width="400" alt="First run, English">
+  <img src="docs/images/ar-welcome.png" width="400" alt="First run, Arabic">
+</p>
 
 ## Requirements
 
