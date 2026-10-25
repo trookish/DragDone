@@ -220,6 +220,12 @@ public static class ActionExecutor
             {
                 failures.Add($"{Path.GetFileName(p.Paths[i])}: {e.Message}");
             }
+            catch (Exception e) when (p.IsMultiple && e is IOException or UnauthorizedAccessException)
+            {
+                // One locked or protected file must not throw away the outputs (and their undo)
+                // already made for the others.
+                failures.Add($"{Path.GetFileName(p.Paths[i])}: {Loc.T("error.io")}");
+            }
         }
         ctx.ReportOverall(1);
 
@@ -321,6 +327,12 @@ public static class ActionExecutor
             {
                 failures.Add($"{Path.GetFileName(p.Paths[i])}: {e.Message}");
             }
+            catch (Exception e) when (p.IsMultiple && e is IOException or UnauthorizedAccessException)
+            {
+                // One locked or protected file must not throw away the outputs (and their undo)
+                // already made for the others.
+                failures.Add($"{Path.GetFileName(p.Paths[i])}: {Loc.T("error.io")}");
+            }
         }
         ctx.ReportOverall(1);
         if (sent == 0) return JobResult.Fail(failures.Count > 0 ? failures[0] : Loc.T("error.print"));
@@ -340,10 +352,14 @@ public static class ActionExecutor
         {
             try
             {
+                // A file that has since been moved away, or a new file now at the original path,
+                // means that item cannot go back; say so rather than reporting it undone.
                 if ((File.Exists(to) || Directory.Exists(to)) && !File.Exists(from) && !Directory.Exists(from))
                     FileOps.MovePath(to, from);
+                else
+                    ok = false;
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 ok = false;
             }

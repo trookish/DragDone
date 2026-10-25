@@ -32,7 +32,7 @@ public static partial class Ffmpeg
     }
 
     /// <summary>True when the file is actually a working FFmpeg, not just a path that exists.</summary>
-    static bool CanRun(string path)
+    internal static bool CanRun(string path)
     {
         if (!File.Exists(path)) return false;
         if (Verified.TryGetValue(path, out var known)) return known;
@@ -55,10 +55,14 @@ public static partial class Ffmpeg
             using var probe = Process.Start(psi);
             if (probe is not null)
             {
-                var banner = probe.StandardOutput.ReadToEnd();
-                probe.WaitForExit(5000);
-                ok = probe.HasExited && probe.ExitCode == 0 &&
-                     banner.Contains("ffmpeg version", StringComparison.OrdinalIgnoreCase);
+                // Both pipes are read in the background so the time limit really applies: a blocking
+                // read would wait for a hung executable forever, and an undrained stderr pipe can
+                // stall the child once it fills. This runs while a drag is in progress.
+                var banner = probe.StandardOutput.ReadToEndAsync();
+                _ = probe.StandardError.ReadToEndAsync();
+                if (probe.WaitForExit(5000) && banner.Wait(1000))
+                    ok = probe.ExitCode == 0 &&
+                         banner.Result.Contains("ffmpeg version", StringComparison.OrdinalIgnoreCase);
                 if (!probe.HasExited) probe.Kill(true);
             }
         }

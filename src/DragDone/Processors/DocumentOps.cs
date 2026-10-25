@@ -35,9 +35,17 @@ public static class DocumentOps
     public static string ReadText(string path)
     {
         var bytes = File.ReadAllBytes(path);
+        // A byte-order mark names the encoding outright: Notepad's "Unicode" is UTF-16LE.
+        if (bytes is [0xFF, 0xFE, 0, 0, ..]) return new UTF32Encoding(false, true).GetString(bytes, 4, bytes.Length - 4);
+        if (bytes is [0, 0, 0xFE, 0xFF, ..]) return new UTF32Encoding(true, true).GetString(bytes, 4, bytes.Length - 4);
+        if (bytes is [0xFF, 0xFE, ..]) return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        if (bytes is [0xFE, 0xFF, ..]) return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        // UTF-16 without a mark still gives itself away: in Latin text every other byte is zero.
+        if (LooksLikeUtf16(bytes, out var bigEndian))
+            return (bigEndian ? Encoding.BigEndianUnicode : Encoding.Unicode).GetString(bytes);
         try
         {
-            // Strict UTF-8 first (with or without BOM), then Windows Arabic for legacy files.
+            // Strict UTF-8 next (with or without BOM), then Windows Arabic for legacy files.
             return new UTF8Encoding(false, true).GetString(bytes).TrimStart('\uFEFF');
         }
         catch (DecoderFallbackException)
@@ -45,6 +53,24 @@ public static class DocumentOps
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             return Encoding.GetEncoding(1256).GetString(bytes);
         }
+    }
+
+    static bool LooksLikeUtf16(byte[] bytes, out bool bigEndian)
+    {
+        bigEndian = false;
+        var n = Math.Min(bytes.Length, 4096) & ~1;
+        if (n < 4) return false;
+        int evenZero = 0, oddZero = 0;
+        for (var k = 0; k < n; k += 2)
+        {
+            if (bytes[k] == 0) evenZero++;
+            if (bytes[k + 1] == 0) oddZero++;
+        }
+        var pairs = n / 2;
+        // Real UTF-8 or ANSI text has no NUL bytes; require a strong, one-sided pattern.
+        if (oddZero > pairs * 0.4 && evenZero < pairs * 0.05) return true;
+        if (evenZero > pairs * 0.4 && oddZero < pairs * 0.05) { bigEndian = true; return true; }
+        return false;
     }
 
     public static string TextToPdf(string source, JobContext ctx)

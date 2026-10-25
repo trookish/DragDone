@@ -199,8 +199,12 @@ public sealed class Settings
                     s.LanguageMode = read.Language == "en" ? LanguageMode.English : LanguageMode.System;
             }
         }
+        // A settings file DragDone may not read (a locked or ACL-protected profile) must not stop the
+        // app from starting: it runs on defaults instead.
         catch (JsonException) { }
         catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        catch (System.Security.SecurityException) { }
 
         // A theme file overrides the look: it is the copy people share and hand-edit, so it wins
         // over the copy that happens to be inside settings.json.
@@ -211,6 +215,8 @@ public sealed class Settings
         }
         catch (JsonException) { }
         catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        catch (System.Security.SecurityException) { }
 
         return s.Normalized();
     }
@@ -335,10 +341,21 @@ public sealed class Settings
         return fallback;
     }
 
+    /// <remarks>
+    /// Called from the job thread while the UI thread may be building a menu from the current
+    /// list, so the list is never changed in place: a new one replaces it, and a reader still
+    /// holding the old one keeps a consistent copy.
+    /// </remarks>
     public void RememberFolder(string folder)
     {
-        RecentFolders.RemoveAll(f => string.Equals(f, folder, StringComparison.OrdinalIgnoreCase));
-        RecentFolders.Insert(0, folder);
-        if (RecentFolders.Count > 5) RecentFolders.RemoveRange(5, RecentFolders.Count - 5);
+        lock (RecentLock)
+        {
+            var next = new List<string>(6) { folder };
+            next.AddRange(RecentFolders.Where(f => !string.Equals(f, folder, StringComparison.OrdinalIgnoreCase)));
+            if (next.Count > 5) next.RemoveRange(5, next.Count - 5);
+            RecentFolders = next;
+        }
     }
+
+    static readonly object RecentLock = new();
 }

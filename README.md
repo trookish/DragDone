@@ -162,10 +162,11 @@ with what you are dragging:
 | Video | MP4, MOV, WebM, GIF, MP3, M4A | Compress (light / balanced / strong), extract audio, mute, frame snapshot, rotate, resize (1080p/720p/480p) |
 | Audio | MP3, M4A, WAV, FLAC, OGG, Opus | Compress, normalize loudness, trim silence, convert to mono |
 | PDF | PNG, JPG (one image per page) | Merge, split into pages, rotate, compress, strip metadata |
-| Word documents (DOCX, DOC, ODT, RTF) | PDF, DOCX, DOC, ODT, RTF, TXT, HTML — through installed Word | — |
-| Spreadsheets (XLSX, XLS, ODS, CSV) | PDF, XLSX, XLS, ODS, CSV — through installed Excel | — |
-| Presentations (PPTX, PPT, ODP) | PDF, PPTX, PPT, ODP — through installed PowerPoint | — |
-| Text and code (TXT, MD, CSV, JSON, XML, LOG…) | PDF, built in | — |
+| Word documents (DOCX, DOC, DOCM, DOTX, ODT, RTF) | PDF, DOCX, DOC, RTF, ODT, TXT, HTML, XPS — through installed Word | Strip metadata, extract images, extract text, statistics, compress images inside (built in, no Office needed) |
+| Spreadsheets (XLSX, XLS, XLSM, XLSB, ODS) | PDF, XLSX, XLS, CSV, ODS, HTML, XPS — through installed Excel | The same built-in tools, plus each sheet to CSV (with Excel) |
+| Presentations (PPTX, PPT, PPSX, ODP) | PDF, PPTX, PPT, ODP, XPS, slides as PNG or JPG — through installed PowerPoint | The same built-in tools, plus slides to images (with PowerPoint) |
+| Visio drawings, Publisher files | PDF — through installed Visio or Publisher | — |
+| Text and code (TXT, MD, CSV, JSON, XML, LOG…) | PDF, built in (UTF-8, UTF-16 and Windows Arabic text); CSV also to XLSX, XLS, ODS with Excel | — |
 | Archives | — | Extract here |
 | Anything | — | Zip, SHA-256 hash |
 
@@ -178,7 +179,7 @@ Crop and rename open a window of their own rather than a dialog:
 
 **Actions (Actions key)** apply to every type: Windows Share sheet (Nearby Sharing where enabled),
 move to Desktop / Documents / Downloads / Pictures / recent folders / a chosen folder, rename, copy
-path, open a terminal there, and a floating shelf that holds files until you drag them somewhere
+path, open a terminal there, print (documents, PDFs and images), and a floating shelf that holds files until you drag them somewhere
 else. The shelf shows its files as a grid of cards — a picture preview (or the file's own icon),
 the name, and a corner menu to open it, show it in Explorer, or remove it — and the whole card is
 what you drag out.
@@ -397,7 +398,10 @@ in [CHANGELOG.md](CHANGELOG.md).
   drag-and-drop from a normal process into an elevated one.
 - One job runs at a time; the ring ignores new drops until the current job finishes.
 - Office conversions need the matching Office application installed; OpenDocument and CSV output
-  follow what that application can save.
+  follow what that application can save. DragDone never closes an Office window you already had
+  open, and a password-protected document fails straight away rather than waiting on a hidden prompt.
+- Print sends each file to its default printer through the Windows print verb, so it works only for
+  file types that have a print handler installed.
 - Windows 11 adds Mica to DragDone's own windows; on Windows 10 the material is acrylic or opaque,
   depending on the preset.
 

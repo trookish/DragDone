@@ -109,11 +109,13 @@ suitable for everyone.
 > اسحب الملف واضغط مفتاحًا ثم أفلته على الإجراء. حوّل الصور والفيديو وملفات PDF ومستندات Office،
 > واضغط وغيّر المقاس وقسّم، كل ذلك على جهازك دون رفع أي شيء، ودون المساس بالملف الأصلي.
 
-**What's new in this version (1.2.0, English):**
+**What's new in this version (1.2.1, English):**
 
 > - Five new ring shapes: petals, honeycomb, tiles, diamonds and fan.
 > - Opening animations and hover effects, each with its own speed and strength, previewed live.
-> - Word, Excel and PowerPoint conversions between their own formats, through installed Office.
+> - Word, Excel, PowerPoint, Visio and Publisher conversions, including PDF, XPS and slide images, through installed Office.
+> - Office tools that need no Office: strip metadata, extract images or text, statistics and compression.
+> - Print from the ring.
 > - Custom actions: add your own programs and conversions to the ring.
 > - File types: tell DragDone which kind an unfamiliar extension is.
 > - A smaller install.
@@ -122,7 +124,9 @@ suitable for everyone.
 
 > - خمسة أشكال جديدة للقائمة: بتلات وخلايا نحل ومربعات ومعيّنات ومروحة.
 > - حركات افتتاح وتأثيرات تمرير، لكل منها سرعتها وقوتها، مع معاينة حية.
-> - تحويل مستندات Word وExcel وPowerPoint بين صيغها عبر Office المثبّت.
+> - تحويل ملفات Word وExcel وPowerPoint وVisio وPublisher، ومنها PDF وXPS وصور الشرائح، عبر Office المثبّت.
+> - أدوات لملفات Office لا تحتاج إلى Office: إزالة البيانات الوصفية واستخراج الصور أو النص والإحصاءات والضغط.
+> - الطباعة من القائمة.
 > - إجراءات مخصصة: أضف برامجك وتحويلاتك الخاصة إلى القائمة.
 > - أنواع الملفات: عرّف DragDone بنوع أي امتداد لا يعرفه.
 > - حجم تثبيت أصغر.
@@ -183,7 +187,8 @@ keep it consistent with the certification notes.
 > file drag, so the action ring can appear — no keystrokes are recorded and no input is injected;
 > (3) a non-activating WPF overlay window drawn over the desktop; (4) starting local conversion
 > engines as child processes (a user-installed `ffmpeg.exe`, Microsoft Office automation when
-> Office is present, and programs the user adds as custom actions) for the files the user drags
+> Office is present, the Windows print handler when the user chooses Print, and programs the user
+> adds as custom actions) for the files the user drags
 > onto the app. All processing is local: the app
 > opens no network connections, collects no telemetry, has no accounts and writes results beside the
 > original file without overwriting it. The same executable is also distributed as a full-trust
@@ -196,6 +201,7 @@ Sideloading such a package needs no approval; only Store submission does.
 - **FFmpeg** is not bundled. Store users without it get the localized dependency message. Bundling
   would mean shipping an LGPL/GPL build and disclosing its licence in the Store listing — a separate
   decision, not a packaging detail.
-- **Microsoft Office** is used only when installed, for the Word, Excel and PowerPoint conversions.
+- **Microsoft Office** is used only when installed, for the Word, Excel, PowerPoint, Visio and
+  Publisher conversions. It never closes an Office window the user already had open.
   Excel needs a printer driver (Microsoft Print to PDF is enough) to produce a PDF.
 - **.NET** is not required: the package is self-contained.

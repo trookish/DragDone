@@ -3,6 +3,36 @@
 All notable changes to DragDone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] — 2026-10-25
+
+### Fixed
+
+- **Office no longer closes your own windows.** Converting a presentation while PowerPoint was open
+  quit PowerPoint, unsaved work included. DragDone now closes only an Office process it started,
+  and a failed conversion no longer leaves a hidden Word, Excel or PowerPoint running.
+- Password-protected Office documents fail straight away with a clear message instead of waiting on
+  a prompt nobody can see.
+- Text saved as "Unicode" in Notepad (UTF-16) became unreadable characters in the PDF.
+- A broken or hung `ffmpeg.exe` could freeze DragDone when a drag started; the check now gives up
+  after five seconds.
+- In a batch, one locked file threw away the outputs already made for the others. It is now listed
+  as a failure and the rest are kept, with undo.
+- Undo reported "Undone" for a move it could not put back, and treated items Windows skipped while
+  recycling as removed.
+- Moving files while a menu was open could crash DragDone through the recent-folders list.
+- A settings file DragDone may not read stopped it from starting; it now starts on defaults.
+
+### Added
+
+- **More Office formats.** XPS and HTML from Word and Excel, XPS and slide images (PNG or JPG) from
+  PowerPoint, and PDF from Visio and Publisher. Rings that would pass eight entries fold the rest
+  into **More**, and a format that needs an Office application you do not have is shown dimmed with
+  the application named.
+- **Office tools without Office.** For Word, Excel and PowerPoint files: strip metadata, extract
+  images, extract text, statistics (words, pages, slides or sheets) and compress the images inside.
+  With Excel, each sheet to CSV; with PowerPoint, slides to images.
+- **Print** in the Actions ring for documents, PDFs and images.
+
 ## [1.2.0] — 2026-10-25
 
 ### Added

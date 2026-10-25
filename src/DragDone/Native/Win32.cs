@@ -197,7 +197,8 @@ public static partial class Win32
             pFrom = string.Join("\0", list) + "\0\0",
             fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI,
         };
-        return SHFileOperation(ref op) == 0;
+        // A zero return only means the call ran; items it skipped are reported separately.
+        return SHFileOperation(ref op) == 0 && !op.fAnyOperationsAborted;
     }
 
     // ---- file and folder icons
