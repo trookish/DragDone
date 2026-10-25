@@ -28,6 +28,10 @@ Nothing. Conversions, resizes, PDF splitting, Office document handling and image
 locally using libraries inside the app, `Windows.Data.Pdf`, and — for video and audio — an FFmpeg
 executable you already have installed. DragDone never downloads FFmpeg or anything else.
 
+Custom actions you add in Settings start the program you named, on the files you dropped. DragDone
+sends nothing to that program beyond the command line you wrote; what the program itself does is
+up to the program.
+
 If you added a file to the Shelf, the shelf remembers its path and shows a thumbnail. That list
 stays on your machine.
 

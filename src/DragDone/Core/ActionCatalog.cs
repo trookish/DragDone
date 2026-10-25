@@ -10,12 +10,52 @@ public static class ActionCatalog
 
     public static readonly MenuTab[] TabOrder = { MenuTab.Convert, MenuTab.Tools, MenuTab.Actions };
 
-    public static IReadOnlyList<ActionDef> Build(DragPayload p, MenuTab tab, Capabilities caps) => tab switch
+    public static IReadOnlyList<ActionDef> Build(DragPayload p, MenuTab tab, Capabilities caps) => WithCustom(tab switch
     {
         MenuTab.Convert => Convert(p, caps),
         MenuTab.Tools => Tools(p, caps),
         _ => Actions(p, caps),
-    };
+    }, p, tab, caps);
+
+    /// <summary>
+    /// Adds the user's own actions for this tab. They join the ring directly while there is
+    /// room; otherwise they share one "Custom" sector, and a full ring folds its last sector in
+    /// with them so nothing is dropped.
+    /// </summary>
+    static IReadOnlyList<ActionDef> WithCustom(IReadOnlyList<ActionDef> ring, DragPayload p, MenuTab tab, Capabilities caps)
+    {
+        var custom = caps.CustomActions
+            .Where(a => a.Tab == tab && CustomActions.Matches(a, p))
+            .Select(a => Custom(a, p))
+            .ToList();
+        if (custom.Count == 0) return ring;
+        if (ring.Count + custom.Count <= MaxSectors) return ring.Concat(custom).ToList();
+
+        var list = ring.ToList();
+        var children = custom;
+        if (list.Count >= MaxSectors)
+        {
+            children = new[] { list[^1] }.Concat(custom).ToList();
+            list.RemoveAt(list.Count - 1);
+        }
+        list.Add(new ActionDef
+        {
+            Id = "custom",
+            LabelKey = "action.custom",
+            Glyph = Glyphs.Edit,
+            Children = children.Take(MaxSectors).ToList(),
+        });
+        return list;
+    }
+
+    static ActionDef Custom(CustomAction a, DragPayload p)
+    {
+        var def = a.IsConversion
+            ? new ActionDef { Id = "custom:" + a.Id, Literal = a.DisplayName, Style = a.Name.Trim().Length == 0 ? ActionStyle.Format : ActionStyle.Icon, Glyph = Glyphs.Edit }
+            : new ActionDef { Id = "custom:" + a.Id, Literal = a.DisplayName, Glyph = Glyphs.Edit };
+        if (a.IsConversion && p.CommonFormat == a.OutputToken) return def.Disabled("reason.sameFormat");
+        return def;
+    }
 
     /// <summary>The tab to open when the requested one has nothing to offer.</summary>
     public static MenuTab Resolve(DragPayload p, MenuTab wanted, Capabilities caps)
@@ -69,6 +109,16 @@ public static class ActionCatalog
                 return new[] { Fmt("png", p), Fmt("jpg", p) };
             case FileKind.Document:
             {
+                // Files that all belong to one Office application can move between its formats;
+                // a CSV opens in Excel, so it also gains the spreadsheet formats.
+                var apps = p.Paths.Select(FileKinds.OfficeAppFor).Distinct().ToList();
+                if (apps is [{ } app])
+                {
+                    var office = caps.Office ? null : "reason.needsOffice";
+                    return FileKinds.OfficeTargets(app)
+                        .Select(t => t == "pdf" && p.Paths.All(FileKinds.IsPlainText) ? Fmt(t, p) : Fmt(t, p, office))
+                        .ToList();
+                }
                 var pdf = Fmt("pdf", p);
                 var needsOffice = p.Paths.Any(FileKinds.IsOfficeDocument);
                 var unsupported = p.Paths.Any(x => !FileKinds.IsOfficeDocument(x) && !FileKinds.IsPlainText(x));

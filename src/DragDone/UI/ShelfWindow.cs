@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DragDone.Core;
 using DragDone.Localization;
+using DragDone.Native;
 
 namespace DragDone.UI;
 
@@ -331,11 +332,20 @@ public sealed class ShelfWindow : FluentWindow
         try
         {
             if (Directory.Exists(path)) return GlyphImage(Glyphs.Folder);
-            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-            if (icon is null) return null;
-            var src = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-            src.Freeze();
-            return src;
+            // The shell owns file icons, and asking it directly keeps System.Drawing out of the
+            // app now that Windows Forms is gone.
+            var handle = Win32.ShellIcon(path);
+            if (handle == IntPtr.Zero) return null;
+            try
+            {
+                var src = Imaging.CreateBitmapSourceFromHIcon(handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                src.Freeze();
+                return src;
+            }
+            finally
+            {
+                Win32.DestroyIcon(handle);
+            }
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
         {

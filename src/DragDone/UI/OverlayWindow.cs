@@ -423,10 +423,16 @@ public sealed class OverlayWindow : Window
         if (_revealed) return;
         _revealed = true;
         _probeTimer.Stop();
-        BeginAnimation(OpacityProperty, new DoubleAnimation(Math.Min(Opacity, 0.02), 1, TimeSpan.FromMilliseconds(110)));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.82, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
-        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.82, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
+        // The ring plays the user's chosen opening animation itself; the window around it (key
+        // bar, caption, info pill) only fades, so the two never fight over the same motion.
+        var fadeMs = _menu.MotionEnabled ? 110 : 0;
+        if (fadeMs > 0) BeginAnimation(OpacityProperty, new DoubleAnimation(Math.Min(Opacity, 0.02), 1, TimeSpan.FromMilliseconds(fadeMs)));
+        else
+        {
+            BeginAnimation(OpacityProperty, null);
+            Opacity = 1;
+        }
+        _menu.PlayOpen();
     }
 
     void Place(Win32.POINT cursor)
@@ -532,7 +538,7 @@ public sealed class OverlayWindow : Window
         var origin = OriginOnScreen(scale);
         for (var i = 0; i < _ring.Count; i++)
         {
-            var a = RadialGeometry.CenterAngle(i, _ring.Count);
+            var a = _menu.Geometry.Mid(i);
             var p = RadialGeometry.PointAt(g.Center, mid, a);
             var sx = origin.X + (int)Math.Round((MenuLeft + p.X) * scale);
             var sy = origin.Y + (int)Math.Round((MenuTop + p.Y) * scale);
@@ -563,6 +569,7 @@ public sealed class OverlayWindow : Window
         _menu.BackLabel = null;
         _ring = ActionCatalog.Build(_payload, tab, _host.Capabilities());
         _menu.Items = _ring;
+        _menu.PlayOpen(transition: true);
         RefreshTabs();
         DefaultCaption();
     }
@@ -573,6 +580,7 @@ public sealed class OverlayWindow : Window
         _ring = parent.Children;
         _menu.Items = _ring;
         _menu.BackLabel = parent.Label;
+        _menu.PlayOpen(transition: true);
         DefaultCaption();
     }
 
@@ -591,6 +599,7 @@ public sealed class OverlayWindow : Window
             _menu.BackLabel = null;
         }
         _menu.Items = _ring;
+        _menu.PlayOpen(transition: true);
         DefaultCaption();
     }
 

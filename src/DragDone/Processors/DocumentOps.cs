@@ -22,8 +22,8 @@ public static class DocumentOps
 
     public static string ToPdf(string source, JobContext ctx)
     {
-        if (FileKinds.IsOfficeDocument(source)) return OfficeToPdf(source, ctx);
         if (FileKinds.IsPlainText(source)) return TextToPdf(source, ctx);
+        if (FileKinds.IsOfficeDocument(source)) return OfficeToPdf(source, ctx);
         throw new UserFacingException(Loc.T("reason.unsupported"));
     }
 
@@ -133,38 +133,56 @@ public static class DocumentOps
 
     // ------------------------------------------------------------------ Office
 
-    public static string OfficeToPdf(string source, JobContext ctx)
+    public static string OfficeToPdf(string source, JobContext ctx) => OfficeConvert(source, "pdf", ctx);
+
+    /// <summary>
+    /// Saves an Office document in another format through the installed Office application. The
+    /// source is opened read-only and written beside itself under a new name; it is never touched.
+    /// </summary>
+    public static string OfficeConvert(string source, string token, JobContext ctx)
     {
-        var output = OutputPaths.For(source, "pdf");
+        var app = FileKinds.OfficeAppFor(source) ?? throw new UserFacingException(Loc.T("reason.unsupported"));
+        if (!FileKinds.OfficeTargets(app).Contains(token)) throw new UserFacingException(Loc.T("reason.unsupported"));
+        if (FileKinds.FormatToken(source) == token) throw new UnchangedException("result.sameFormat");
+        ctx.Token.ThrowIfCancellationRequested();
+
+        var output = OutputPaths.For(source, token);
         var full = Path.GetFullPath(source);
-        var ext = Path.GetExtension(source).ToLowerInvariant();
         try
         {
-            switch (ext)
+            switch (app)
             {
-                case ".xls" or ".xlsx" or ".ods":
-                    WithApp("Excel.Application", app =>
+                case OfficeApp.Excel:
+                    WithApp("Excel.Application", excel =>
                     {
-                        app.DisplayAlerts = false;
-                        dynamic wb = app.Workbooks.Open(full, 0, true);
-                        try { wb.ExportAsFixedFormat(0, output); }
+                        excel.DisplayAlerts = false;
+                        dynamic wb = excel.Workbooks.Open(full, 0, true);
+                        try
+                        {
+                            if (token == "pdf") wb.ExportAsFixedFormat(0, output);
+                            else wb.SaveAs(output, ExcelFormat(token));
+                        }
                         finally { wb.Close(false); }
                     });
                     break;
-                case ".ppt" or ".pptx" or ".odp":
-                    WithApp("PowerPoint.Application", app =>
+                case OfficeApp.PowerPoint:
+                    WithApp("PowerPoint.Application", ppt =>
                     {
-                        dynamic pres = app.Presentations.Open(full, -1, 0, 0); // ReadOnly, Untitled=false, WithWindow=false
-                        try { pres.SaveAs(output, 32); }
+                        dynamic pres = ppt.Presentations.Open(full, -1, 0, 0); // ReadOnly, Untitled=false, WithWindow=false
+                        try { pres.SaveAs(output, PowerPointFormat(token)); }
                         finally { pres.Close(); }
                     });
                     break;
                 default:
-                    WithApp("Word.Application", app =>
+                    WithApp("Word.Application", word =>
                     {
-                        app.DisplayAlerts = 0;
-                        dynamic doc = app.Documents.Open(full, false, true, false);
-                        try { doc.ExportAsFixedFormat(output, 17); }
+                        word.DisplayAlerts = 0;
+                        dynamic doc = word.Documents.Open(full, false, true, false);
+                        try
+                        {
+                            if (token == "pdf") doc.ExportAsFixedFormat(output, 17);
+                            else doc.SaveAs2(output, WordFormat(token));
+                        }
                         finally { doc.Close(false); }
                     });
                     break;
@@ -174,11 +192,48 @@ public static class DocumentOps
                                        or InvalidOperationException)
         {
             Ffmpeg.TryDelete(output);
+            // Excel lays out PDF pages through a printer driver and refuses outright when none is
+            // installed or the Print Spooler is stopped. Say so, rather than a generic failure.
+            if (app == OfficeApp.Excel && token == "pdf" && ex.Message.Contains("printer", StringComparison.OrdinalIgnoreCase))
+                throw new UserFacingException(Loc.T("error.excelPrinter"));
             throw new UserFacingException(Loc.T("error.office"));
         }
         if (!File.Exists(output)) throw new UserFacingException(Loc.T("error.office"));
+        ctx.Report(1);
         return output;
     }
+
+    /// <summary>Word's WdSaveFormat values.</summary>
+    public static int WordFormat(string token) => token switch
+    {
+        "docx" => 16,
+        "doc" => 0,
+        "odt" => 23,
+        "rtf" => 6,
+        "txt" => 7, // Unicode text, so Arabic survives
+        "html" => 10, // filtered HTML: no Office-only markup
+        _ => throw new UserFacingException(Loc.T("reason.unsupported")),
+    };
+
+    /// <summary>Excel's XlFileFormat values.</summary>
+    public static int ExcelFormat(string token) => token switch
+    {
+        "xlsx" => 51,
+        "xls" => 56,
+        "ods" => 60,
+        "csv" => 62, // UTF-8 CSV
+        _ => throw new UserFacingException(Loc.T("reason.unsupported")),
+    };
+
+    /// <summary>PowerPoint's PpSaveAsFileType values.</summary>
+    public static int PowerPointFormat(string token) => token switch
+    {
+        "pdf" => 32,
+        "pptx" => 24,
+        "ppt" => 1,
+        "odp" => 35,
+        _ => throw new UserFacingException(Loc.T("reason.unsupported")),
+    };
 
     static void WithApp(string progId, Action<dynamic> work)
     {

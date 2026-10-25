@@ -3,6 +3,41 @@
 All notable changes to DragDone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-10-25
+
+### Added
+
+- **Five new shapes.** Petals, Honeycomb, Tiles, Diamonds and Fan join Donut, solid wheel, Orbit
+  and Automatic. The shape is now chosen from a dropdown.
+- **Motion.** Nine opening animations (Fade, Pop, Zoom, Spin, Cascade, Bloom, Drop, Elastic,
+  Ripple, or none) with an adjustable length, and nine hover effects (Grow, Lift, Glow, Highlight, Outline,
+  Pulse, Tint, Magnify, Spotlight) with their own strength and transition speed. A shortened
+  animation plays when switching menus or opening a sub-ring. Motion turns off with the Windows
+  **Animation effects** setting unless you choose otherwise. The live preview replays every change.
+- **Office conversions.** Word documents convert to PDF, DOCX, DOC, ODT, RTF, TXT and HTML;
+  spreadsheets to PDF, XLSX, XLS, ODS and CSV; presentations to PDF, PPTX, PPT and ODP — all through
+  the Office applications already installed, offline.
+- **Custom actions.** Settings → Custom actions adds any program to a ring, with file-type matching,
+  argument placeholders (`{file}`, `{files}`, `{dir}`, `{name}`, `{ext}`, `{out}`) and a choice of
+  ring. Setting an output format makes it a conversion whose output DragDone names beside the
+  original, so it never overwrites a file. Extra actions share a **Custom** sub-ring when the ring is
+  full.
+- **File types.** Settings → File types assigns an unknown extension to image, video, audio,
+  document or archive, so those files get the right rings.
+- `--show … --examples` fills the customisation cards with samples for screenshots.
+
+### Changed
+
+- The installed size is smaller: WinForms is gone, and only the English and Arabic framework
+  resources ship.
+- Filtering Settings hides sections whose rows were all filtered out, instead of leaving empty
+  cards.
+
+### Fixed
+
+- Excel → PDF on a machine without a printer driver now explains that Excel needs one, instead of
+  reporting a generic Office failure.
+
 ## [1.1.1] — 2026-10-21
 
 ### Changed

@@ -7,25 +7,19 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\DragDone.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>DragDone</AssemblyName>
     <RootNamespace>DragDone</RootNamespace>
-    <Version>1.1.1</Version>
+    <Version>1.2.0</Version>
     <Product>DragDone</Product>
     <Company>Turki Alshaalan</Company>
     <Copyright>Copyright © 2026 Turki Alshaalan</Copyright>
     <Description>Drag • Press • Done</Description>
-    <!-- WPF owns DPI awareness through app.manifest; the WinForms advice does not apply. -->
-    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <!-- The interface is Arabic and English only; framework satellite assemblies for the other
+         thirteen languages are dead weight in a tray utility. -->
+    <SatelliteResourceLanguages>en;ar</SatelliteResourceLanguages>
   </PropertyGroup>
-
-  <ItemGroup>
-    <!-- WinForms and WPF both bring these namespaces; keep only the WPF ones implicit. -->
-    <Using Remove="System.Windows.Forms" />
-    <Using Remove="System.Drawing" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="PDFsharp" Version="6.2.4" />
@@ -40,5 +34,13 @@
   <ItemGroup>
     <InternalsVisibleTo Include="DragDone.Tests" />
   </ItemGroup>
+
+  <!-- The native symbol reader only exists to read PDBs, and this build ships none. -->
+  <Target Name="DropSymbolReader" AfterTargets="Publish">
+    <ItemGroup>
+      <SymbolReaderLeftover Include="$(PublishDir)Microsoft.DiaSymReader.Native.amd64.dll" />
+    </ItemGroup>
+    <Delete Files="@(SymbolReaderLeftover)" />
+  </Target>
 
 </Project>

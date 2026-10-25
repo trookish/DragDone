@@ -57,7 +57,9 @@ public sealed record ActionDef
 }
 
 /// <summary>What the machine can do right now; decides which sectors are enabled.</summary>
-public sealed record Capabilities(bool Ffmpeg, bool Office, IReadOnlyList<string> RecentFolders)
+public sealed record Capabilities(bool Ffmpeg, bool Office, IReadOnlyList<string> RecentFolders, IReadOnlyList<CustomAction>? Custom = null)
 {
+    public IReadOnlyList<CustomAction> CustomActions => Custom ?? Array.Empty<CustomAction>();
+
     public static Capabilities All { get; } = new(true, true, Array.Empty<string>());
 }

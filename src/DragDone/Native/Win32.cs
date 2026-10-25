@@ -200,6 +200,40 @@ public static partial class Win32
         return SHFileOperation(ref op) == 0;
     }
 
+    // ---- file and folder icons
+
+    public const uint SHGFI_ICON = 0x000000100;
+    public const uint SHGFI_LARGEICON = 0x000000000;
+    public const uint SHGFI_SMALLICON = 0x000000001;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHFILEINFO
+    {
+        public IntPtr hIcon;
+        public int iIcon;
+        public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SHGetFileInfo(string path, uint fileAttributes, ref SHFILEINFO info, uint size, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr icon);
+
+    /// <summary>
+    /// The shell's icon for a file, at the large size. Returns <see cref="IntPtr.Zero"/> when the
+    /// shell has none; the caller owns the handle and must pass it to <see cref="DestroyIcon"/>.
+    /// </summary>
+    public static IntPtr ShellIcon(string path)
+    {
+        var info = new SHFILEINFO();
+        var result = SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_LARGEICON);
+        return result == IntPtr.Zero ? IntPtr.Zero : info.hIcon;
+    }
+
     // ---- input nudge (forces OLE to re-hit-test after the overlay appears)
 
     [StructLayout(LayoutKind.Sequential)]

@@ -30,6 +30,11 @@ public sealed class Look
     public double MenuDiameter { get; set; } = 352;
     public double Contrast { get; set; } = 1.0;
     public double HoverGrow { get; set; } = 1.0;
+    public OpenAnimation Animation { get; set; } = OpenAnimation.Pop;
+    public HoverEffect Hover { get; set; } = HoverEffect.Grow;
+    public int AnimationMs { get; set; } = 240;
+    public int HoverMs { get; set; } = 140;
+    public bool AnimateRingChanges { get; set; } = true;
 
     [JsonIgnore]
     public string Summary => $"{ThemePreset}/{Layout}/{Density}";
@@ -55,6 +60,11 @@ public sealed class Look
         MenuDiameter = s.MenuDiameter,
         Contrast = s.Contrast,
         HoverGrow = s.HoverGrow,
+        Animation = s.Animation,
+        Hover = s.Hover,
+        AnimationMs = s.AnimationMs,
+        HoverMs = s.HoverMs,
+        AnimateRingChanges = s.AnimateRingChanges,
     };
 
     public void CopyTo(Settings s)
@@ -78,5 +88,10 @@ public sealed class Look
         s.MenuDiameter = MenuDiameter;
         s.Contrast = Contrast;
         s.HoverGrow = HoverGrow;
+        s.Animation = Animation;
+        s.Hover = Hover;
+        s.AnimationMs = AnimationMs;
+        s.HoverMs = HoverMs;
+        s.AnimateRingChanges = AnimateRingChanges;
     }
 }

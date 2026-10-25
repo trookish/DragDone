@@ -53,7 +53,7 @@ and packs it with `MakeAppx` from the Windows SDK (any version under
    rebuilt.
 
 3. **Keep the version in step with `DragDone.csproj`.** The manifest version is generated from it as
-   a four-part number (`1.1.0` becomes `1.1.0.0`). A submission must have a higher version than the
+   a four-part number (`1.2.0` becomes `1.2.0.0`). A submission must have a higher version than the
    package already in the Store.
 
 4. **Upload the unsigned `.msix`.** Partner Center accepts a single-architecture `.msix` directly
@@ -101,26 +101,46 @@ suitable for everyone.
 
 **Short description (English):**
 
-> Drag a file to your screen edge, pick an action, done. Convert, compress, resize, split PDFs,
-> rotate video — all on your PC, nothing uploaded, originals never overwritten.
+> Drag a file, press a key, drop it on an action. Convert images, video, PDFs and Office documents,
+> compress, resize and split — all on your PC, nothing uploaded, originals never overwritten.
 
 **Short description (Arabic):**
 
-> اسحب الملف إلى حافة الشاشة واختر الإجراء. تحويل وضغط وتغيير مقاس وتقسيم PDF وتدوير الفيديو، كل ذلك
-> على جهازك دون رفع أي شيء، ودون المساس بالملف الأصلي.
+> اسحب الملف واضغط مفتاحًا ثم أفلته على الإجراء. حوّل الصور والفيديو وملفات PDF ومستندات Office،
+> واضغط وغيّر المقاس وقسّم، كل ذلك على جهازك دون رفع أي شيء، ودون المساس بالملف الأصلي.
+
+**What's new in this version (1.2.0, English):**
+
+> - Five new ring shapes: petals, honeycomb, tiles, diamonds and fan.
+> - Opening animations and hover effects, each with its own speed and strength, previewed live.
+> - Word, Excel and PowerPoint conversions between their own formats, through installed Office.
+> - Custom actions: add your own programs and conversions to the ring.
+> - File types: tell DragDone which kind an unfamiliar extension is.
+> - A smaller install.
+
+**What's new in this version (Arabic):**
+
+> - خمسة أشكال جديدة للقائمة: بتلات وخلايا نحل ومربعات ومعيّنات ومروحة.
+> - حركات افتتاح وتأثيرات تمرير، لكل منها سرعتها وقوتها، مع معاينة حية.
+> - تحويل مستندات Word وExcel وPowerPoint بين صيغها عبر Office المثبّت.
+> - إجراءات مخصصة: أضف برامجك وتحويلاتك الخاصة إلى القائمة.
+> - أنواع الملفات: عرّف DragDone بنوع أي امتداد لا يعرفه.
+> - حجم تثبيت أصغر.
 
 **Certification notes** — send these with the submission, because the behaviour looks unusual from
 the outside:
 
 > DragDone is a tray application with no main window. It stays in the notification area and reacts
-> only when the user drags a file to a screen edge and releases it: a radial menu of actions appears
-> under the pointer. It uses a low-level mouse hook purely to notice the start of a shell drag, and a
+> only while the user is dragging a file from File Explorer or the Desktop and presses Shift, Ctrl
+> or Alt: a radial menu of actions appears under the pointer, and the user drops the file on one. It uses a low-level mouse hook purely to notice the start of a shell drag, and a
 > non-activating window for the menu so the drag operation is not disturbed. No keyboard or content
 > logging, no network access, no telemetry. Files are read only for the action the user picks, and
 > results are written next to the original without overwriting it. The first launch shows a short
 > welcome window explaining the tray behaviour, since the app would otherwise be invisible.
 > Video and audio actions require a locally installed FFmpeg; the app never downloads it and shows a
-> localized explanation when it is missing.
+> localized explanation when it is missing. Users may also add their own custom actions in Settings,
+> which start a program the user chose on the files the user dropped; nothing is configured by
+> default.
 
 **Screenshots:** the 1920×1080 set in `packaging/StoreScreenshots/` is generated from the app's own
 renders by `python packaging/make_store_screenshots.py` — regenerate it after a visual change rather
@@ -162,8 +182,9 @@ keep it consistent with the certification notes.
 > that survives Explorer restarts; (2) a low-level mouse hook used solely to notice the start of a
 > file drag, so the action ring can appear — no keystrokes are recorded and no input is injected;
 > (3) a non-activating WPF overlay window drawn over the desktop; (4) starting local conversion
-> engines as child processes (a user-installed `ffmpeg.exe`, and Microsoft Office automation when
-> Office is present) for the files the user drags onto the app. All processing is local: the app
+> engines as child processes (a user-installed `ffmpeg.exe`, Microsoft Office automation when
+> Office is present, and programs the user adds as custom actions) for the files the user drags
+> onto the app. All processing is local: the app
 > opens no network connections, collects no telemetry, has no accounts and writes results beside the
 > original file without overwriting it. The same executable is also distributed as a full-trust
 > installer outside the Store, which is why the capability is declared in the package manifest.
@@ -175,5 +196,6 @@ Sideloading such a package needs no approval; only Store submission does.
 - **FFmpeg** is not bundled. Store users without it get the localized dependency message. Bundling
   would mean shipping an LGPL/GPL build and disclosing its licence in the Store listing — a separate
   decision, not a packaging detail.
-- **Microsoft Office** is used only when installed, for Office-specific actions.
+- **Microsoft Office** is used only when installed, for the Word, Excel and PowerPoint conversions.
+  Excel needs a printer driver (Microsoft Print to PDF is enough) to produce a PDF.
 - **.NET** is not required: the package is self-contained.

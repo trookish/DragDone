@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using DragDone.Core;
 using DragDone.Localization;
 using DragDone.Native;
 using DragDone.Processors;
 using DragDone.UI;
-using Forms = System.Windows.Forms;
 using Microsoft.Win32;
 
 namespace DragDone.Shell;
@@ -20,7 +20,7 @@ public sealed class AppHost : IOverlayHost, IDisposable
     readonly Dispatcher _ui;
     readonly OverlayWindow _overlay;
     readonly DragWatcher _watcher;
-    readonly Forms.NotifyIcon _tray;
+    readonly TrayIcon _tray;
     readonly bool _office;
     SettingsWindow? _settingsWindow;
     UndoRecord? _lastUndo;
@@ -49,17 +49,10 @@ public sealed class AppHost : IOverlayHost, IDisposable
         _overlay.Prepare();
         _watcher = new DragWatcher(_ui, _overlay, () => Settings);
 
-        _tray = new Forms.NotifyIcon
-        {
-            Icon = LoadTrayIcon(),
-            Visible = true,
-        };
-        _tray.MouseClick += (_, e) =>
-        {
-            if (e.Button == Forms.MouseButtons.Left) ShowSettings();
-        };
-        BuildTrayMenu();
-        Loc.LanguageChanged += BuildTrayMenu;
+        _tray = new TrayIcon { MenuBuilder = BuildTrayMenu };
+        _tray.LeftClick += ShowSettings;
+        _tray.Text = TrayText;
+        Loc.LanguageChanged += RefreshTray;
 
         _idleTrim = new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.ApplicationIdle, (_, _) => TrimWhenIdle(), _ui);
         _idleTrim.Start();
@@ -120,7 +113,7 @@ public sealed class AppHost : IOverlayHost, IDisposable
         _watcher.Start();
         if (!_watcher.HookActive)
         {
-            _tray.ShowBalloonTip(5000, "DragDone", Loc.T("tray.hookFailed"), Forms.ToolTipIcon.Warning);
+            _tray.ShowBalloon("DragDone", Loc.T("tray.hookFailed"), TrayIcon.BalloonIcon.Warning);
         }
         if (Settings.ShowWelcome)
         {
@@ -130,13 +123,6 @@ public sealed class AppHost : IOverlayHost, IDisposable
                 Settings.Save();
             }).Show();
         }
-    }
-
-    static System.Drawing.Icon LoadTrayIcon()
-    {
-        var info = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/DragDone.ico"));
-        using var stream = info!.Stream;
-        return new System.Drawing.Icon(stream, Forms.SystemInformation.SmallIconSize);
     }
 
     // ------------------------------------------------------------------ settings
@@ -158,7 +144,7 @@ public sealed class AppHost : IOverlayHost, IDisposable
         {
             if (!firstRun) Debug.WriteLine(ex);
         }
-        if (_tray is not null) BuildTrayMenu();
+        if (_tray is not null) RefreshTray();
     }
 
     public void ShowSettings()
@@ -174,42 +160,49 @@ public sealed class AppHost : IOverlayHost, IDisposable
         _settingsWindow.Activate();
     }
 
-    void BuildTrayMenu()
+    string TrayText => Settings.Paused
+        ? "DragDone — " + Loc.T("tray.pausedShort")
+        : "DragDone — " + Loc.T("app.tagline");
+
+    void RefreshTray()
     {
-        _tray.Text = Settings.Paused ? "DragDone — " + Loc.T("tray.pausedShort") : "DragDone — " + Loc.T("app.tagline");
-        var menu = new Forms.ContextMenuStrip
-        {
-            RightToLeft = Loc.IsRtl ? Forms.RightToLeft.Yes : Forms.RightToLeft.No,
-            ShowImageMargin = false,
-        };
-        var header = new Forms.ToolStripLabel("DragDone  ·  Drag • Press • Done") { Enabled = false };
-        menu.Items.Add(header);
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(Loc.T("tray.settings"), null, (_, _) => ShowSettings());
-        var pause = new Forms.ToolStripMenuItem(Loc.T("tray.pause")) { Checked = Settings.Paused, CheckOnClick = true };
+        if (_tray is not null) _tray.Text = TrayText;
+    }
+
+    /// <summary>
+    /// Builds the tray menu for the settings and language as they are now. It is built on every
+    /// right click rather than kept in step, so it can never show a state the app has moved past.
+    /// </summary>
+    ContextMenu BuildTrayMenu()
+    {
+        var menu = new ContextMenu();
+        TrayMenu.Apply(menu, Loc.IsRtl);
+        menu.Items.Add(new MenuItem { Header = "DragDone  ·  Drag • Press • Done", IsEnabled = false });
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item(Loc.T("tray.settings"), ShowSettings));
+        var pause = new MenuItem { Header = Loc.T("tray.pause"), IsCheckable = true, IsChecked = Settings.Paused };
         pause.Click += (_, _) =>
         {
-            Settings.Paused = pause.Checked;
+            Settings.Paused = pause.IsChecked;
             Settings.Save();
-            BuildTrayMenu();
+            RefreshTray();
         };
         menu.Items.Add(pause);
-        menu.Items.Add(Loc.T("tray.shelf"), null, (_, _) =>
+        menu.Items.Add(Item(Loc.T("tray.shelf"), () =>
         {
             Win32.GetCursorPos(out var p);
             ShelfWindow.Instance.ShowNear(p);
-        });
-        var undo = new Forms.ToolStripMenuItem(Loc.T("tray.undoLast")) { Enabled = _lastUndo is not null };
-        undo.Click += (_, _) =>
+        }));
+        var undo = Item(Loc.T("tray.undoLast"), () =>
         {
             if (_lastUndo is null) return;
             var ok = ActionExecutor.Undo(_lastUndo);
             _lastUndo = null;
-            BuildTrayMenu();
-            _tray.ShowBalloonTip(2500, "DragDone", Loc.T(ok ? "result.undone" : "result.undoFailed"), Forms.ToolTipIcon.None);
-        };
+            _tray.ShowBalloon("DragDone", Loc.T(ok ? "result.undone" : "result.undoFailed"), TrayIcon.BalloonIcon.App);
+        });
+        undo.IsEnabled = _lastUndo is not null;
         menu.Items.Add(undo);
-        var language = new Forms.ToolStripMenuItem(Loc.T("tray.language"));
+        var language = new MenuItem { Header = Loc.T("tray.language") };
         var modes = new (LanguageMode Mode, string Label)[]
         {
             (LanguageMode.System, Loc.T("lang.system")),
@@ -218,34 +211,36 @@ public sealed class AppHost : IOverlayHost, IDisposable
         };
         foreach (var (mode, label) in modes)
         {
-            var item = new Forms.ToolStripMenuItem(label) { Checked = Settings.LanguageMode == mode };
+            var item = new MenuItem { Header = label, IsCheckable = true, IsChecked = Settings.LanguageMode == mode };
             item.Click += (_, _) =>
             {
                 Settings.LanguageMode = mode;
                 Settings.Save();
                 ApplySettings();
             };
-            language.DropDownItems.Add(item);
+            language.Items.Add(item);
         }
         menu.Items.Add(language);
-        menu.Items.Add(Loc.T("tray.help"), null, (_, _) => new WelcomeWindow(null).Show());
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => Application.Current.Shutdown());
-        var old = _tray.ContextMenuStrip;
-        _tray.ContextMenuStrip = menu;
-        old?.Dispose();
+        menu.Items.Add(Item(Loc.T("tray.help"), () => new WelcomeWindow(null).Show()));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item(Loc.T("tray.exit"), () => Application.Current.Shutdown()));
+        return menu;
+    }
+
+    /// <summary>One tray row: a label and what choosing it does.</summary>
+    static MenuItem Item(string header, Action action)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => action();
+        return item;
     }
 
     // ------------------------------------------------------------------ IOverlayHost
 
     public Capabilities Capabilities() =>
-        new(Ffmpeg.Locate(Settings.FfmpegPath) is not null, _office, Settings.RecentFolders);
+        new(Ffmpeg.Locate(Settings.FfmpegPath) is not null, _office, Settings.RecentFolders, Settings.CustomActions);
 
-    public void RememberUndo(UndoRecord record)
-    {
-        _lastUndo = record;
-        BuildTrayMenu();
-    }
+    public void RememberUndo(UndoRecord record) => _lastUndo = record;
 
     public void RunInteractive(string actionId, DragPayload payload)
     {
@@ -254,7 +249,7 @@ public sealed class AppHost : IOverlayHost, IDisposable
         {
             case "act.share":
                 if (!ShareOps.Share(payload.Paths, ToDip(cursor)))
-                    _tray.ShowBalloonTip(4000, "DragDone", Loc.T("error.share"), Forms.ToolTipIcon.Warning);
+                    _tray.ShowBalloon("DragDone", Loc.T("error.share"), TrayIcon.BalloonIcon.Warning);
                 break;
 
             case "act.shelf":
@@ -293,7 +288,7 @@ public sealed class AppHost : IOverlayHost, IDisposable
                 }
                 catch (UserFacingException e)
                 {
-                    _tray.ShowBalloonTip(4000, "DragDone", e.Message, Forms.ToolTipIcon.Warning);
+                    _tray.ShowBalloon("DragDone", e.Message, TrayIcon.BalloonIcon.Warning);
                     return;
                 }
                 var w = new CropWindow(image, Path.GetFileName(payload.Paths[0]), payload.Count);
@@ -342,7 +337,6 @@ public sealed class AppHost : IOverlayHost, IDisposable
     {
         _idleTrim.Stop();
         _watcher.Dispose();
-        _tray.Visible = false;
         _tray.Dispose();
     }
 }

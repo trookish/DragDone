@@ -12,7 +12,6 @@ using DragDone.Core;
 using DragDone.Localization;
 using DragDone.Processors;
 using DragDone.Shell;
-using Forms = System.Windows.Forms;
 
 namespace DragDone.UI;
 
@@ -53,6 +52,12 @@ public sealed class SettingsWindow : FluentWindow
     double _lastOffset;
     bool _holdingScroll;
     double _previewOffX;
+
+    // Preview playback: the still preview is redrawn frame by frame while the opening plays.
+    readonly DispatcherTimer _play;
+    readonly Stopwatch _playClock = new();
+    double _playMs;
+    bool _replay;
     double _previewOffY;
 
     // Swapped as a whole by each build: the page is only adopted once it is complete, and
@@ -103,6 +108,8 @@ public sealed class SettingsWindow : FluentWindow
         _save.Stop();
         _preview = new DispatcherTimer(TimeSpan.FromMilliseconds(120), DispatcherPriority.Background, (_, _) => DrawPreview(), Dispatcher);
         _preview.Stop();
+        _play = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => PlayFrame(), Dispatcher);
+        _play.Stop();
         _restyle = new DispatcherTimer(TimeSpan.FromMilliseconds(180), DispatcherPriority.Background, (_, _) => Restyle(), Dispatcher);
         _restyle.Stop();
 
@@ -122,6 +129,7 @@ public sealed class SettingsWindow : FluentWindow
         };
         Closed += (_, _) =>
         {
+            _play.Stop();
             Flush();
             _instance = null;
         };
@@ -292,12 +300,16 @@ public sealed class SettingsWindow : FluentWindow
         foreach (var (section, _) in _sections) section.Visibility = Visibility.Collapsed;
         foreach (var (element, text) in _searchable)
             element.Visibility = query.Length == 0 || text.Contains(query, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
-        // A section stays only when something inside it survived the filter.
+        // A section stays only when one of its own rows survived the filter. Card borders and
+        // dividers are not rows, so they never keep an otherwise empty section on screen.
+        var kept = new HashSet<DependencyObject>();
+        if (query.Length > 0)
+            foreach (var (element, _) in _searchable)
+                if (element.Visibility == Visibility.Visible)
+                    for (DependencyObject? d = element; d is not null; d = LogicalTreeHelper.GetParent(d))
+                        if (!kept.Add(d)) break;
         foreach (var (section, body) in _sections)
-        {
-            if (query.Length == 0) section.Visibility = Visibility.Visible;
-            else section.Visibility = ContainsVisible(body) ? Visibility.Visible : Visibility.Collapsed;
-        }
+            section.Visibility = query.Length == 0 || kept.Contains(body) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Applies the search filter, so a screenshot can show one section on its own.</summary>
@@ -335,13 +347,6 @@ public sealed class SettingsWindow : FluentWindow
         SyncFloatingPreview();
     }
 
-    static bool ContainsVisible(UIElement element) => element switch
-    {
-        Panel panel => panel.Visibility == Visibility.Visible && panel.Children.Cast<UIElement>().Any(ContainsVisible),
-        FrameworkElement fe => fe.Visibility == Visibility.Visible,
-        _ => false,
-    };
-
     void Build()
     {
         Title = Loc.T("settings.title");
@@ -358,10 +363,13 @@ public sealed class SettingsWindow : FluentWindow
         {
             page.Children.Add(Section("settings.section.appearance", "settings.section.appearance.info", Appearance()));
             page.Children.Add(Section("settings.section.ring", "settings.section.ring.info", Ring()));
+            page.Children.Add(Section("settings.section.motion", "settings.section.motion.info", MotionCard()));
             page.Children.Add(Section("settings.section.shortcuts", "settings.section.shortcuts.info", Shortcuts()));
             page.Children.Add(Section("settings.section.general", "settings.section.general.info", General()));
             page.Children.Add(Section("settings.section.output", "settings.section.output.info", Output()));
             page.Children.Add(Section("settings.section.tools", "settings.section.tools.info", Tools()));
+            page.Children.Add(Section("settings.section.custom", "settings.section.custom.info", CustomCard()));
+            page.Children.Add(Section("settings.section.types", "settings.section.types.info", TypesCard()));
             page.Children.Add(Section("settings.section.themes", "settings.section.themes.info", Themes()));
             page.Children.Add(Section("settings.section.about", "settings.section.about.info", About()));
             _scroll.Content = page;
@@ -752,11 +760,8 @@ public sealed class SettingsWindow : FluentWindow
 
     void PickCustomAccent()
     {
-        using var dlg = new Forms.ColorDialog { FullOpen = true, AnyColor = true };
-        var current = Theme.AccentFor(_s.Accent);
-        dlg.Color = System.Drawing.Color.FromArgb(current.R, current.G, current.B);
-        if (dlg.ShowDialog() != Forms.DialogResult.OK) return;
-        _s.AccentHex = $"#{dlg.Color.R:X2}{dlg.Color.G:X2}{dlg.Color.B:X2}";
+        if (ColorPickerWindow.Pick(this, Theme.AccentFor(_s.Accent)) is not { } picked) return;
+        _s.AccentHex = $"#{picked.R:X2}{picked.G:X2}{picked.B:X2}";
         Commit();
         Rebuild();
     }
@@ -801,6 +806,16 @@ public sealed class SettingsWindow : FluentWindow
         hint.TextWrapping = TextWrapping.Wrap;
         hint.Margin = new Thickness(0, 8, 0, 0);
         stack.Children.Add(hint);
+        var play = new Button
+        {
+            Content = Loc.T("settings.preview.play"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(12, 4, 12, 4),
+            ToolTip = Loc.T("settings.preview.play.desc"),
+        };
+        play.Click += (_, _) => PlayPreview();
+        stack.Children.Add(play);
         _searchable.Add((stack, Loc.T("settings.preview") + " preview"));
         // Remembered so the floating copy knows when this one has been scrolled out of sight.
         _previewSlot = stack;
@@ -1045,9 +1060,39 @@ public sealed class SettingsWindow : FluentWindow
         _floatCard.BeginAnimation(Canvas.TopProperty, new DoubleAnimation(fromY, target.Y, ms) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
     }
 
-    void DrawPreview()
+    /// <summary>Plays the opening animation in the preview, once.</summary>
+    internal void PlayPreview()
+    {
+        _replay = false;
+        _playMs = new RadialMenu { Look = _s }.OpeningMs;
+        if (_playMs < 1 || !IsLoaded)
+        {
+            DrawPreview();
+            return;
+        }
+        _playClock.Restart();
+        _play.Start();
+        PlayFrame();
+    }
+
+    void PlayFrame()
+    {
+        var t = _playMs < 1 ? 1 : Math.Min(1, _playClock.Elapsed.TotalMilliseconds / _playMs);
+        if (t >= 1) _play.Stop();
+        DrawPreview(t);
+    }
+
+    void DrawPreview() => DrawPreview(1);
+
+    void DrawPreview(double reveal)
     {
         _preview.Stop();
+        if (reveal >= 1 && _replay)
+        {
+            PlayPreview();
+            return;
+        }
+        if (reveal >= 1 && _play.IsEnabled) _play.Stop();
         try
         {
             var menu = new RadialMenu { Look = _s };
@@ -1055,6 +1100,9 @@ public sealed class SettingsWindow : FluentWindow
             var ring = ActionCatalog.Build(payload, MenuTab.Convert, DragDone.Core.Capabilities.All);
             menu.Items = ring.Take(6).ToList();
             menu.SetHub(Loc.T("kind.image"), Loc.Size(2_400_000), 1);
+            // One sector is held so the chosen hover effect is visible too.
+            menu.HoverIndex = 1;
+            menu.Settle();
             var size = menu.Geometry.Size;
             menu.Measure(new Size(size, size));
             menu.Arrange(new Rect(0, 0, size, size));
@@ -1077,6 +1125,15 @@ public sealed class SettingsWindow : FluentWindow
             _previewOffX = Math.Abs(shift.X + centre - side / 2);
             _previewOffY = Math.Abs(shift.Y + centre - side / 2);
             Diag.Log($"preview size={size:0} bounds={bounds.X:0},{bounds.Y:0} {bounds.Width:0}x{bounds.Height:0} side={side:0}");
+
+            // The frame is sized from the settled ring, so an animation plays inside a still frame
+            // instead of the frame resizing around it.
+            if (reveal < 1)
+            {
+                menu.Reveal = reveal;
+                menu.InvalidateVisual();
+                menu.UpdateLayout();
+            }
 
             var plate = new DrawingVisual();
             using (var dc = plate.RenderOpen())
@@ -1106,7 +1163,7 @@ public sealed class SettingsWindow : FluentWindow
     {
         return Card(
             Row("settings.layout", "settings.layout.desc", Choose(
-                new[] { MenuLayout.Auto, MenuLayout.Donut, MenuLayout.Pie, MenuLayout.Orbit }, _s.Layout,
+                ShapeOrder, _s.Layout,
                 v => _s.Layout = v, v => Loc.T("layout." + v.ToString().ToLowerInvariant()))),
             Row("settings.density", "settings.density.desc", Choose(
                 new[] { Density.Compact, Density.Roomy, Density.Large }, _s.Density,
@@ -1117,14 +1174,43 @@ public sealed class SettingsWindow : FluentWindow
             Slider("settings.gap", "settings.gap.desc", 0, 16, 1, _s.Gap, v => _s.Gap = v, v => Loc.Digits(((int)v).ToString())),
             Slider("settings.frame", "settings.frame.desc", 0, 4, 0.2, _s.FrameThickness, v => _s.FrameThickness = v,
                 v => v == 0 ? Loc.T("settings.frame.none") : Loc.Digits(v.ToString("0.#"))),
-            Slider("settings.hover", "settings.hover.desc", 0, 2, 0.1, _s.HoverGrow, v => _s.HoverGrow = v,
-                v => Loc.Digits(Math.Round(v * 100).ToString("0")) + "%"),
             Divider(),
             Row("settings.labels", "settings.labels.desc", Choose(
                 new[] { LabelStyle.Auto, LabelStyle.Icons, LabelStyle.Labels, LabelStyle.Text }, _s.Labels,
                 v => _s.Labels = v, v => Loc.T("labels." + v.ToString().ToLowerInvariant()))),
             Row("settings.rotated", "settings.rotated.desc", Toggle(_s.RotatedLabels, v => _s.RotatedLabels = v)),
             Row("settings.tabBar", "settings.tabBar.desc", Toggle(_s.ShowTabBar, v => _s.ShowTabBar = v)));
+    }
+
+    /// <summary>Every shape, in the order the dropdown lists them: the automatic choice, then the joined rings, then the badge circles.</summary>
+    internal static readonly MenuLayout[] ShapeOrder =
+    {
+        MenuLayout.Auto, MenuLayout.Donut, MenuLayout.Pie, MenuLayout.Petals, MenuLayout.Fan,
+        MenuLayout.Orbit, MenuLayout.Honeycomb, MenuLayout.Tiles, MenuLayout.Diamonds,
+    };
+
+    // ------------------------------------------------------------------ motion
+
+    UIElement MotionCard()
+    {
+        // Every motion change replays the opening in the preview, so the choice is seen, not guessed.
+        return Card(
+            Row("settings.animation", "settings.animation.desc", Choose(
+                Enum.GetValues<OpenAnimation>(), _s.Animation,
+                v => { _s.Animation = v; _replay = true; }, v => Loc.T("animation." + v.ToString().ToLowerInvariant()))),
+            Slider("settings.animationMs", "settings.animationMs.desc", 0, 800, 20, _s.AnimationMs, v => { _s.AnimationMs = (int)v; _replay = true; },
+                v => v == 0 ? Loc.T("settings.off") : Loc.F("settings.ms", ("n", (int)v))),
+            Row("settings.animateChanges", "settings.animateChanges.desc", Toggle(_s.AnimateRingChanges, v => _s.AnimateRingChanges = v)),
+            Divider(),
+            Row("settings.hoverEffect", "settings.hoverEffect.desc", Choose(
+                Enum.GetValues<HoverEffect>(), _s.Hover,
+                v => _s.Hover = v, v => Loc.T("hover." + v.ToString().ToLowerInvariant()))),
+            Slider("settings.hover", "settings.hover.desc", 0, 2, 0.1, _s.HoverGrow, v => _s.HoverGrow = v,
+                v => Loc.Digits(Math.Round(v * 100).ToString("0")) + "%"),
+            Slider("settings.hoverMs", "settings.hoverMs.desc", 0, 500, 10, _s.HoverMs, v => _s.HoverMs = (int)v,
+                v => v == 0 ? Loc.T("settings.instant") : Loc.F("settings.ms", ("n", (int)v))),
+            Divider(),
+            Row("settings.systemMotion", "settings.systemMotion.desc", Toggle(_s.FollowSystemMotion, v => { _s.FollowSystemMotion = v; _replay = true; })));
     }
 
     // ------------------------------------------------------------------ shortcuts
@@ -1289,6 +1375,216 @@ public sealed class SettingsWindow : FluentWindow
         _searchable.Add((card, "FFmpeg Microsoft Office"));
         return card;
     }
+
+    // ------------------------------------------------------------------ custom actions
+
+    UIElement CustomCard()
+    {
+        var items = new List<UIElement>();
+        if (_s.CustomActions.Count == 0)
+            items.Add(Muted(Loc.T("custom.empty"), 12));
+        for (var i = 0; i < _s.CustomActions.Count; i++)
+        {
+            if (i > 0) items.Add(Divider());
+            items.Add(CustomEditor(_s.CustomActions[i]));
+        }
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+        var add = PlainButton(Loc.T("custom.add"), (_, _) =>
+        {
+            _s.CustomActions.Add(new CustomAction());
+            Commit();
+            Rebuild();
+        });
+        buttons.Children.Add(add);
+        var examples = PlainButton(Loc.T("custom.examples"), (_, _) => { });
+        examples.Margin = new Thickness(8, 0, 0, 0);
+        var menu = new ContextMenu { PlacementTarget = examples, Placement = PlacementMode.Bottom };
+        foreach (var example in CustomActions.Examples())
+        {
+            var item = new MenuItem { Header = example.DisplayName + "  —  " + example.Types, FlowDirection = FlowDirection.LeftToRight };
+            item.Click += (_, _) =>
+            {
+                example.Id = CustomAction.NewId();
+                _s.CustomActions.Add(example);
+                Commit();
+                Rebuild();
+            };
+            menu.Items.Add(item);
+        }
+        examples.Click += (_, _) => menu.IsOpen = true;
+        buttons.Children.Add(examples);
+        items.Add(buttons);
+        items.Add(Muted(Loc.T("custom.placeholders"), 11.5));
+
+        var card = Card(items.ToArray());
+        _searchable.Add((card, Loc.T("settings.section.custom") + " custom program command " +
+            string.Join(" ", _s.CustomActions.Select(a => a.DisplayName + " " + a.Program))));
+        return card;
+    }
+
+    UIElement CustomEditor(CustomAction a)
+    {
+        var panel = new StackPanel();
+        var status = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 11.5, Margin = new Thickness(0, 4, 0, 0) };
+        void Refresh()
+        {
+            var problem = CustomActions.Problem(a);
+            status.Text = problem is null ? Loc.F("custom.shows", ("tab", Loc.T("tab." + a.Tab.ToString().ToLowerInvariant()))) : Loc.T(problem);
+            status.Foreground = Theme.Brush(problem is null ? Theme.Current.TextSoft : Theme.Current.Warning);
+        }
+
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = new TextBlock { Text = a.DisplayName.Length > 0 ? a.DisplayName : Loc.T("custom.untitled"), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.Brush(Theme.Current.Text) };
+        head.Children.Add(title);
+        var on = Toggle(a.Enabled, v => a.Enabled = v);
+        on.ToolTip = Loc.T("custom.enabled");
+        Grid.SetColumn(on, 1);
+        head.Children.Add(on);
+        var remove = PlainButton(Loc.T("custom.remove"), (_, _) =>
+        {
+            _s.CustomActions.Remove(a);
+            Commit();
+            Rebuild();
+        });
+        remove.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(remove, 2);
+        head.Children.Add(remove);
+        panel.Children.Add(head);
+
+        void Changed()
+        {
+            title.Text = a.DisplayName.Length > 0 ? a.DisplayName : Loc.T("custom.untitled");
+            Refresh();
+            Commit();
+        }
+
+        panel.Children.Add(Field("custom.name", a.Name, v => a.Name = v, Changed, ltr: false));
+        panel.Children.Add(Field("custom.types", a.Types, v => a.Types = v, Changed, hint: "custom.types.hint"));
+        var program = Field("custom.program", a.Program, v => a.Program = v, Changed, hint: "custom.program.hint", browse: true);
+        panel.Children.Add(program);
+        panel.Children.Add(Field("custom.arguments", a.Arguments, v => a.Arguments = v, Changed, hint: "custom.arguments.hint"));
+        panel.Children.Add(Field("custom.output", a.Output, v => a.Output = v, Changed, hint: "custom.output.hint"));
+        panel.Children.Add(Row("custom.tab", null, Choose(ActionCatalog.TabOrder, a.Tab,
+            v => { a.Tab = v; Refresh(); }, v => Loc.T("tab." + v.ToString().ToLowerInvariant()))));
+        panel.Children.Add(Row("custom.showWindow", "custom.showWindow.desc", Toggle(a.ShowWindow, v => a.ShowWindow = v)));
+        Refresh();
+        panel.Children.Add(status);
+        return panel;
+    }
+
+    /// <summary>A labelled text field that saves when it loses focus. Paths and commands stay left-to-right.</summary>
+    FrameworkElement Field(string labelKey, string value, Action<string> set, Action changed, bool ltr = true, string? hint = null, bool browse = false)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var label = new TextBlock { Text = Loc.T(labelKey), VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.Brush(Theme.Current.Text) };
+        if (hint is not null) label.ToolTip = Loc.T(hint);
+        grid.Children.Add(label);
+        var box = new TextBox { Text = value, Padding = new Thickness(8, 4, 8, 4), FontSize = 12.5, ToolTip = hint is null ? null : Loc.T(hint) };
+        if (ltr) box.FlowDirection = FlowDirection.LeftToRight;
+        box.LostFocus += (_, _) =>
+        {
+            if (box.Text == value) return;
+            value = box.Text;
+            set(box.Text);
+            changed();
+        };
+        Grid.SetColumn(box, 1);
+        grid.Children.Add(box);
+        if (browse)
+        {
+            var pick = PlainButton(Loc.T("settings.ffmpeg.browse"), (_, _) =>
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = Loc.T("custom.programs") + "|*.exe;*.cmd;*.bat|*.*|*.*", Title = Loc.T("custom.program") };
+                if (dlg.ShowDialog(this) != true) return;
+                box.Text = dlg.FileName;
+                value = box.Text;
+                set(box.Text);
+                changed();
+            });
+            pick.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(pick, 2);
+            grid.Children.Add(pick);
+        }
+        return grid;
+    }
+
+    // ------------------------------------------------------------------ file types
+
+    UIElement TypesCard()
+    {
+        var items = new List<UIElement>();
+        foreach (var (ext, kind) in _s.ExtraTypes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.Children.Add(new TextBlock { Text = ext, FlowDirection = FlowDirection.LeftToRight, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Foreground = Theme.Brush(Theme.Current.Text) });
+            var kindBox = Choose(FileKinds.Assignable, kind, v =>
+            {
+                _s.ExtraTypes[ext] = v;
+                FileKinds.SetExtra(_s.ExtraTypes);
+            }, KindLabel);
+            Grid.SetColumn(kindBox, 1);
+            grid.Children.Add(kindBox);
+            var remove = PlainButton(Loc.T("custom.remove"), (_, _) =>
+            {
+                _s.ExtraTypes.Remove(ext);
+                FileKinds.SetExtra(_s.ExtraTypes);
+                Commit();
+                Rebuild();
+            });
+            remove.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(remove, 2);
+            grid.Children.Add(remove);
+            items.Add(grid);
+        }
+        if (items.Count == 0) items.Add(Muted(Loc.T("types.empty"), 12));
+
+        var addRow = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        addRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        addRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        addRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var extBox = new TextBox { FlowDirection = FlowDirection.LeftToRight, Padding = new Thickness(8, 4, 8, 4), FontSize = 12.5, ToolTip = Loc.T("types.extension.hint") };
+        addRow.Children.Add(extBox);
+        var newKind = FileKind.Image;
+        var kindPick = Choose(FileKinds.Assignable, newKind, v => newKind = v, KindLabel);
+        kindPick.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(kindPick, 1);
+        addRow.Children.Add(kindPick);
+        var message = Muted("", 11.5);
+        var add = PlainButton(Loc.T("types.add"), (_, _) =>
+        {
+            var ext = FileKinds.NormalizeExtension(extBox.Text);
+            if (ext is null)
+            {
+                message.Text = Loc.T("types.invalid");
+                return;
+            }
+            _s.ExtraTypes[ext] = newKind;
+            FileKinds.SetExtra(_s.ExtraTypes);
+            Commit();
+            Rebuild();
+        });
+        add.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(add, 2);
+        addRow.Children.Add(add);
+        items.Add(addRow);
+        items.Add(message);
+
+        var card = Card(items.ToArray());
+        _searchable.Add((card, Loc.T("settings.section.types") + " extension file type " + string.Join(" ", _s.ExtraTypes.Keys)));
+        return card;
+    }
+
+    static string KindLabel(FileKind kind) => Loc.T("kind." + kind.ToString().ToLowerInvariant());
 
     static UIElement StatusLine(bool ok, string text)
     {

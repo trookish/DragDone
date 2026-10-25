@@ -42,6 +42,21 @@ public enum MenuLayout
 
     /// <summary>Donut for a few sectors, Pie once the ring gets crowded.</summary>
     Auto,
+
+    /// <summary>Rounded petals around the hub, like a flower.</summary>
+    Petals,
+
+    /// <summary>Hexagonal cells floating in a circle.</summary>
+    Honeycomb,
+
+    /// <summary>Rounded square tiles floating in a circle.</summary>
+    Tiles,
+
+    /// <summary>Diamond badges floating in a circle.</summary>
+    Diamonds,
+
+    /// <summary>A half ring that opens above the cursor.</summary>
+    Fan,
 }
 
 public enum LabelStyle
@@ -113,6 +128,22 @@ public sealed class Settings
     public double Contrast { get; set; } = 1.0;
     public double HoverGrow { get; set; } = 1.0;
 
+    // ---- motion
+    public OpenAnimation Animation { get; set; } = OpenAnimation.Pop;
+    public HoverEffect Hover { get; set; } = HoverEffect.Grow;
+
+    /// <summary>Length of the opening animation; 0 turns it off.</summary>
+    public int AnimationMs { get; set; } = 240;
+
+    /// <summary>How long a sector takes to settle into its hover state; 0 is instant.</summary>
+    public int HoverMs { get; set; } = 140;
+
+    /// <summary>Replays a shorter version of the opening animation on tab and submenu changes.</summary>
+    public bool AnimateRingChanges { get; set; } = true;
+
+    /// <summary>Turns motion off when Windows' own "Animation effects" setting is off.</summary>
+    public bool FollowSystemMotion { get; set; } = true;
+
     /// <summary>How long a drag must rest before the menu opens, when that trigger is on.</summary>
     public int DwellMs { get; set; } = 650;
 
@@ -122,6 +153,13 @@ public sealed class Settings
     public string? FfmpegPath { get; set; }
     public string? OutputFolder { get; set; }
     public List<string> RecentFolders { get; set; } = new();
+
+    // ---- customisation
+    /// <summary>Programs the user added to the rings; see <see cref="CustomAction"/>.</summary>
+    public List<CustomAction> CustomActions { get; set; } = new();
+
+    /// <summary>Extensions the user assigned to a kind, so unknown files get the right rings.</summary>
+    public Dictionary<string, FileKind> ExtraTypes { get; set; } = new();
 
     /// <summary>Bumped when a release needs to migrate the file.</summary>
     public int Version { get; set; } = 2;
@@ -245,12 +283,34 @@ public sealed class Settings
         AccentStrength = Math.Clamp(AccentStrength, 0.2, 1.6);
         HoverGrow = Math.Clamp(HoverGrow, 0, 2);
         CornerRatio = Math.Clamp(CornerRatio, 0, 0.5);
+        if (!Enum.IsDefined(Layout)) Layout = MenuLayout.Auto;
+        if (!Enum.IsDefined(Animation)) Animation = OpenAnimation.Pop;
+        if (!Enum.IsDefined(Hover)) Hover = HoverEffect.Grow;
+        AnimationMs = Math.Clamp(AnimationMs, 0, 800);
+        HoverMs = Math.Clamp(HoverMs, 0, 500);
         if (AccentHex is { Length: > 0 } hex)
             AccentHex = hex.Length == 7 && hex[0] == '#' && hex.Skip(1).All(Uri.IsHexDigit) ? hex.ToUpperInvariant() : null;
         ConvertKey = SanitizeKey(ConvertKey, "Shift");
         ToolsKey = SanitizeKey(ToolsKey, "Ctrl");
         ActionsKey = SanitizeKey(ActionsKey, "Alt");
         RecentFolders = RecentFolders.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToList();
+        CustomActions = (CustomActions ?? new()).Where(a => a is not null).Take(32).ToList();
+        foreach (var a in CustomActions)
+        {
+            a.Name ??= "";
+            a.Types ??= "*";
+            a.Program ??= "";
+            a.Arguments ??= "";
+            a.Output ??= "";
+            if (string.IsNullOrWhiteSpace(a.Id) || CustomActions.Count(x => x.Id == a.Id) > 1) a.Id = CustomAction.NewId();
+            if (!Enum.IsDefined(a.Tab)) a.Tab = MenuTab.Tools;
+        }
+        ExtraTypes = (ExtraTypes ?? new())
+            .Select(kv => (Ext: FileKinds.NormalizeExtension(kv.Key), kv.Value))
+            .Where(kv => kv.Ext is not null && FileKinds.Assignable.Contains(kv.Value))
+            .GroupBy(kv => kv.Ext!)
+            .ToDictionary(g => g.Key, g => g.Last().Value);
+        FileKinds.SetExtra(ExtraTypes);
         Version = 2;
         return this;
     }

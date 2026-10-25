@@ -59,7 +59,7 @@ public static class Snapshots
             Loc.Set(lang);
             foreach (var preset in Theme.PresetIds)
             {
-                foreach (var layout in new[] { MenuLayout.Donut, MenuLayout.Pie, MenuLayout.Orbit })
+                foreach (var layout in SettingsWindow.ShapeOrder.Where(l => l != MenuLayout.Auto))
                 {
                     _look = new Settings { ThemePreset = preset, Layout = layout, Theme = ModeFor(preset) };
                     Theme.Attach(_look);
@@ -96,6 +96,29 @@ public static class Snapshots
             }
         }
 
+        // Motion: every hover effect held on one sector, and every opening animation at three
+        // points of its timeline, on the shape it reads best on.
+        Loc.Set("en");
+        foreach (var effect in Enum.GetValues<HoverEffect>())
+        {
+            _look = new Settings { ThemePreset = "vivid", Hover = effect, Layout = MenuLayout.Donut };
+            Theme.Attach(_look);
+            Save(folder, $"hover-{effect.ToString().ToLowerInvariant()}", Ring(1, 1));
+            _look.Layout = MenuLayout.Honeycomb;
+            Save(folder, $"hover-{effect.ToString().ToLowerInvariant()}-badges", Ring(1, 1));
+            count += 2;
+        }
+        foreach (var anim in Enum.GetValues<OpenAnimation>())
+        {
+            _look = new Settings { ThemePreset = "vivid", Animation = anim, Layout = MenuLayout.Pie };
+            Theme.Attach(_look);
+            foreach (var t in new[] { 0.15, 0.4, 0.7 })
+            {
+                Save(folder, $"open-{anim.ToString().ToLowerInvariant()}-{(int)(t * 100):00}", Ring(-1, t));
+                count++;
+            }
+        }
+
         _look = new Settings();
         Theme.Attach(_look);
         Loc.Set("ar");
@@ -107,6 +130,19 @@ public static class Snapshots
     {
         var w = new OverlayWindow(new FakeHost(_look));
         return w.SnapshotRoot(new DragPayload(files), tab, hover, sub);
+    }
+
+    /// <summary>A bare ring with a held sector and a point in its opening animation.</summary>
+    static FrameworkElement Ring(int hover, double reveal)
+    {
+        var menu = new RadialMenu { Look = _look };
+        var payload = new DragPayload(new[] { Sample("photo.heic") });
+        menu.Items = ActionCatalog.Build(payload, MenuTab.Convert, Capabilities.All).Take(6).ToList();
+        menu.SetHub(Loc.T("kind.image"), Loc.Size(2_400_000), 1);
+        menu.HoverIndex = hover;
+        menu.Settle();
+        menu.Reveal = reveal;
+        return menu;
     }
 
     static FrameworkElement Result(string output)
@@ -165,6 +201,13 @@ public static class Snapshots
     {
         var offscreen = capturePath is not null;
         var settings = live ? Settings.Load() : new Settings();
+        // --examples shows the customisation cards filled in, the way a user would set them up.
+        if (Environment.GetCommandLineArgs().Contains("--examples"))
+        {
+            settings.CustomActions.AddRange(CustomActions.Examples().Take(2));
+            settings.ExtraTypes[".cr3"] = FileKind.Image;
+            settings.ExtraTypes[".mts"] = FileKind.Video;
+        }
         // No language given means "whatever the app would use", which is the system's language
         // unless the user pinned one.
         Loc.Set(lang ?? settings.ResolvedLanguage());
@@ -255,7 +298,9 @@ public static class Snapshots
             var pills = Count<RadioButton>(window);
             var dropdowns = Count<ComboBox>(window);
             Check("options are multi-choice pills", pills >= 15, $"{pills} pills");
-            Check("few options left in dropdowns", dropdowns <= 4, $"{dropdowns} dropdowns");
+            // Short lists are pills; only the long ones (language, accent, shape, animation,
+            // hover effect, theme) earn a dropdown.
+            Check("few options left in dropdowns", dropdowns <= 7, $"{dropdowns} dropdowns");
 
             Check("preview starts inline", !window.FloatingPreviewShown, "not floating at the top");
 

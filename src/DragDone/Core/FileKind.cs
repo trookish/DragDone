@@ -13,6 +13,14 @@ public enum FileKind
     Mixed,
 }
 
+/// <summary>The Office application that converts a document.</summary>
+public enum OfficeApp
+{
+    Word,
+    Excel,
+    PowerPoint,
+}
+
 public static class FileKinds
 {
     static readonly Dictionary<string, FileKind> ByExtension = Build();
@@ -41,10 +49,41 @@ public static class FileKinds
         return map;
     }
 
+    // Extensions the user taught DragDone in Settings; they win over the built-in table.
+    static volatile Dictionary<string, FileKind> _extra = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Kinds a user may assign an extension to.</summary>
+    public static readonly FileKind[] Assignable = { FileKind.Image, FileKind.Video, FileKind.Audio, FileKind.Document, FileKind.Archive };
+
+    /// <summary>Replaces the user-added extensions (".jfif2" → Image). Invalid entries are ignored.</summary>
+    public static void SetExtra(IReadOnlyDictionary<string, FileKind>? extra)
+    {
+        var map = new Dictionary<string, FileKind>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (ext, kind) in extra ?? new Dictionary<string, FileKind>())
+        {
+            var e = NormalizeExtension(ext);
+            if (e is not null && Assignable.Contains(kind)) map[e] = kind;
+        }
+        _extra = map;
+    }
+
+    /// <summary>".PNG", "png" and "*.png" all become ".png"; anything that is not a plain extension is null.</summary>
+    public static string? NormalizeExtension(string? ext)
+    {
+        var e = (ext ?? "").Trim().TrimStart('*').TrimStart('.').ToLowerInvariant();
+        if (e.Length is 0 or > 16 || !e.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')) return null;
+        return "." + e;
+    }
+
+    /// <summary>The kind DragDone knows for an extension without the user's additions.</summary>
+    public static FileKind BuiltIn(string ext) => ByExtension.TryGetValue(ext, out var kind) ? kind : FileKind.Other;
+
     public static FileKind Of(string path)
     {
         if (Directory.Exists(path)) return FileKind.Folder;
-        return ByExtension.TryGetValue(Path.GetExtension(path), out var kind) ? kind : FileKind.Other;
+        var ext = Path.GetExtension(path);
+        if (_extra.TryGetValue(ext, out var extra)) return extra;
+        return ByExtension.TryGetValue(ext, out var kind) ? kind : FileKind.Other;
     }
 
     public static FileKind Common(IReadOnlyList<string> paths)
@@ -71,6 +110,27 @@ public static class FileKinds
         ".doc" or ".docx" or ".odt" or ".rtf" or ".xls" or ".xlsx" or ".ods" or ".ppt" or ".pptx" or ".odp" => true,
         _ => false,
     };
+
+    /// <summary>The Office application that opens a file, or null for anything Office does not own.</summary>
+    public static OfficeApp? OfficeAppFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".doc" or ".docx" or ".odt" or ".rtf" => OfficeApp.Word,
+        ".xls" or ".xlsx" or ".ods" or ".csv" => OfficeApp.Excel,
+        ".ppt" or ".pptx" or ".odp" => OfficeApp.PowerPoint,
+        _ => null,
+    };
+
+    /// <summary>Formats each Office application can save to, in ring order. PDF always comes first.</summary>
+    public static IReadOnlyList<string> OfficeTargets(OfficeApp app) => app switch
+    {
+        OfficeApp.Word => WordTargets,
+        OfficeApp.Excel => ExcelTargets,
+        _ => PowerPointTargets,
+    };
+
+    static readonly string[] WordTargets = { "pdf", "docx", "doc", "odt", "rtf", "txt", "html" };
+    static readonly string[] ExcelTargets = { "pdf", "xlsx", "xls", "ods", "csv" };
+    static readonly string[] PowerPointTargets = { "pdf", "pptx", "ppt", "odp" };
 
     /// <summary>Normalised format token used to dim the "already this format" sector.</summary>
     public static string FormatToken(string path)

@@ -19,8 +19,9 @@ Everything runs offline, and the interface follows the language Windows is showi
   <img src="docs/images/ar-convert-pie.png" width="250" alt="Convert menu, Arabic, paper theme, solid wheel">
 </p>
 
-Three of the shapes it can take, from the same menu: a donut ring, an orbit of badges around an open
-centre, and a solid wheel. Labels, density, colours, material and size are all yours to set.
+Three of the nine shapes it can take, from the same menu: a donut ring, an orbit of badges around an
+open centre, and a solid wheel. Labels, density, colours, material, size and motion are all yours to
+set, and you can add your own programs, conversions and file types to the rings.
 
 ## Make it yours
 
@@ -29,7 +30,8 @@ Nothing about the look is hard-coded. Open **Settings** from the tray icon:
 | | |
 |---|---|
 | **Character** | seven presets — Windows, Fluent, Paper, Graphite, Terminal, Vivid, Contrast — then adjust anything |
-| **Shape** | Donut, solid wheel, orbit, or automatic; diameter, gap, outline thickness, hover growth |
+| **Shape** | Donut, solid wheel, orbit, petals, honeycomb, tiles, diamonds, fan, or automatic; diameter, gap, outline thickness |
+| **Motion** | nine opening animations (or none) and nine hover effects, with their length, strength and speed; follows the Windows animation setting unless you turn that off |
 | **Density** | compact, roomy, large — spacing and type size together |
 | **Names** | automatic, symbols, symbols and names, or text only; rotate outside labels or keep them upright |
 | **Colour** | follow the Windows accent, pick a named colour, or choose any colour; accent strength and contrast |
@@ -38,6 +40,8 @@ Nothing about the look is hard-coded. Open **Settings** from the tray icon:
 | **The key bar** | show or hide the row of key buttons under the ring |
 | **Your keys** | bind Convert, Tools and Actions to Shift, Ctrl, Alt or Win — independently |
 | **The trigger** | the key alone, or also a short rest of the pointer (80–900 ms) |
+| **Custom actions** | run any program on the dropped files, or make it a conversion with its own output format |
+| **File types** | tell DragDone which kind an unknown extension is, so those files get the right rings |
 
 The settings window previews the ring live: every slider redraws it, in your language and your
 direction. Scroll the page and the preview moves out to a floating card in the corner you choose —
@@ -53,8 +57,41 @@ rows further down. Nothing jumps back to the top when you change something.
   <img src="docs/images/en-settings-scrolled.png" width="400" alt="Settings scrolled, with the live preview floating in the bottom-right corner">
 </p>
 
-Options with only a few choices are a row you click once, not a dropdown you open — shape, density,
-names, mode, language. Sliders jump straight to the value you click.
+Options with only a few choices are a row you click once — density, names, mode. Longer lists such
+as shape, animation, hover effect, language and colour are dropdowns. Sliders jump straight to the
+value you click.
+
+### Shapes and motion
+
+Every shape draws the same actions, so switching is purely a matter of taste:
+
+<p>
+  <img src="docs/images/shapes.png" width="820" alt="The eight drawn shapes: donut, solid wheel, petals, fan, orbit, honeycomb, tiles and diamonds">
+</p>
+
+The ring can open with **Fade**, **Pop**, **Zoom**, **Spin**, **Cascade**, **Bloom**, **Drop**,
+**Elastic** or **Ripple**, or with no animation at all. The same motion, shortened, plays when you
+switch menus or open a sub-ring. Each column below is one animation at 15%, 40% and 70% of the way
+through:
+
+<p>
+  <img src="docs/images/animations.png" width="820" alt="Opening animations, three frames each">
+</p>
+
+While a drag rests on a sector it can **Grow**, **Lift**, **Glow**, **Highlight**, **Outline**,
+**Pulse**, **Tint**, **Magnify** or **Spotlight**. Strength and transition speed are separate sliders,
+and every change replays in the preview:
+
+<p>
+  <img src="docs/images/hover.png" width="820" alt="Hover effects on the ring and on badge shapes">
+</p>
+
+<p>
+  <img src="docs/images/en-settings-motion.png" width="460" alt="The Motion settings with the floating live preview">
+</p>
+
+When **Animation effects** is off in Windows accessibility settings, DragDone turns its motion off as
+well, unless you tell it not to.
 
 ### Presets
 
@@ -125,7 +162,10 @@ with what you are dragging:
 | Video | MP4, MOV, WebM, GIF, MP3, M4A | Compress (light / balanced / strong), extract audio, mute, frame snapshot, rotate, resize (1080p/720p/480p) |
 | Audio | MP3, M4A, WAV, FLAC, OGG, Opus | Compress, normalize loudness, trim silence, convert to mono |
 | PDF | PNG, JPG (one image per page) | Merge, split into pages, rotate, compress, strip metadata |
-| Documents | PDF (plain text built in; Word/Excel/PowerPoint through installed Office) | — |
+| Word documents (DOCX, DOC, ODT, RTF) | PDF, DOCX, DOC, ODT, RTF, TXT, HTML — through installed Word | — |
+| Spreadsheets (XLSX, XLS, ODS, CSV) | PDF, XLSX, XLS, ODS, CSV — through installed Excel | — |
+| Presentations (PPTX, PPT, ODP) | PDF, PPTX, PPT, ODP — through installed PowerPoint | — |
+| Text and code (TXT, MD, CSV, JSON, XML, LOG…) | PDF, built in | — |
 | Archives | — | Extract here |
 | Anything | — | Zip, SHA-256 hash |
 
@@ -162,6 +202,35 @@ next to the original, never on top of it:
 
 The current format is shown dimmed. Actions that need a missing component stay visible and say why
 instead of disappearing.
+
+### Your own actions
+
+**Settings → Custom actions** adds any program to a ring. Give it a name, the file types it applies
+to (`.png, .jpg`, a kind such as `image` or `video`, or `*`), the program, its arguments, and which
+ring it belongs in. The placeholders `{file}`, `{files}`, `{dir}`, `{name}` and `{ext}` are filled in
+for each drop and paths are quoted for you.
+
+Set an **output format** and the action becomes a conversion: DragDone chooses `{out}` beside the
+original — `photo.jxl`, or `photo (2).jxl` if that exists — so a custom tool can never overwrite a
+file either. A failed run reports the program's exit code and leaves nothing behind.
+
+```text
+Name       JPEG XL
+Types      image
+Program    magick
+Arguments  {file} {out}
+Output     jxl
+```
+
+<p>
+  <img src="docs/images/en-settings-custom.png" width="400" alt="Custom actions, English">
+  <img src="docs/images/ar-settings-custom.png" width="400" alt="Custom actions, Arabic">
+</p>
+
+Custom actions join the ring directly while there is room. Beyond that they share one **Custom**
+sector with a sub-ring, so the ring never overflows. **Settings → File types** maps an extension
+DragDone does not know — `.cr3`, `.mts`, `.jxl` — to image, video, audio, document or archive, and
+those files then get that kind's rings and your custom actions.
 
 ## Rules it keeps
 
@@ -215,7 +284,9 @@ The first run opens a card with the three keys and where to change them:
 - **Optional:** `ffmpeg.exe` for video/audio work and WebP/AVIF images. DragDone looks in the
   configured path, next to `DragDone.exe`, on `PATH`, and in common install folders (winget, Scoop,
   Chocolatey).
-- **Optional:** Microsoft Office for Word/Excel/PowerPoint → PDF.
+- **Optional:** Microsoft Office for Word, Excel and PowerPoint conversions. DragDone drives the
+  installed applications locally and never uploads anything. Excel needs a printer driver such as
+  Microsoft Print to PDF to produce a PDF.
 
 Images use Windows Imaging Component, PDF pages render with `Windows.Data.Pdf`, and PDFs are
 assembled with [PDFsharp](https://github.com/empira/PDFsharp) 6.2.4 (MIT).
@@ -254,20 +325,21 @@ Command-line modes, useful for scripting and verification:
 | `DragDone.exe` / `--tray` | Run in the tray (a second launch opens Settings in the running instance) |
 | `--settings` | Open Settings |
 | `--run <actionId> <files…> [--report out.json] [--lang ar\|en]` | Run one action headless, e.g. `--run convert:jpg photo.png` |
-| `--snapshot <folder>` | Render the ring in 104 states (presets × layouts × densities × labels, both languages) |
-| `--show <window> [ar\|en] [--capture out.png] [--live] [--filter text] [--scroll px]` | Open `settings`, `welcome`, `crop`, `rename` or `shelf` with sample data; `--live` uses your own settings and theme instead, `--filter` narrows the settings window to the matching rows, `--scroll` captures the page further down (where the preview floats). Without a language, the window uses the language the app would use. |
+| `--snapshot <folder>` | Render the ring in 138 states: every preset and shape, densities, labels, hover effects and frames of each opening animation |
+| `--show <window> [ar\|en] [--capture out.png] [--live] [--filter text] [--scroll px]` | Open `settings`, `welcome`, `crop`, `rename` or `shelf` with sample data; `--live` uses your own settings and theme instead, `--filter` narrows the settings window to the matching rows, `--scroll` captures the page further down (where the preview floats), `--examples` fills in sample custom actions and file types. Without a language, the window uses the language the app would use. |
 | `--selftest settings\|shelf [--out report.txt]` | Check a window in-process — the settings choice rows, the floating preview appearing and hiding on scroll, the scroll position surviving a change, the corner a drag picks; or the shelf grid, its corner menus and its rebuild on removal. Nothing is shown or clicked on screen. |
 | `--lang-info [--out file.txt]` | Report which language the app would use and why — the mode, the system language, the resolved language and the text direction |
 
 ## Verification
 
-- `dotnet test` — 101 tests: drag state machine and key bindings, ring geometry per layout, palette
+- `dotnet test` — 180 tests: drag state machine and key bindings, ring geometry per layout, palette
   derivation, settings and theme files (round trip, precedence, clamping, comments), the remembered
   preview corner, catalogue rules, collision-safe paths, payload classification, localisation
   parity, language resolution against the real Windows setting, and the overlay regressions found
   by driving the real app (a finished job must restore the ring, and the window must be sized to
-  fit the ring and the bar below it).
-- `--selftest settings` — 13 checks on the live Settings window, without a pointer or a screenshot.
+  fit the ring and the bar below it). Also every shape, animation and hover effect, the Office
+  format targets, and custom actions run end to end through a real process.
+- `--selftest settings` — 21 checks on the live Settings window, without a pointer or a screenshot.
 - `--selftest shelf` — 7 checks on the live shelf: one card per file, cards wrapping into a grid,
   the corner menu on each, and the grid rebuilding on removal and clearing.
 - `bash tools/smoke.sh` — runs 44 real actions on generated media and reports each output.
@@ -324,6 +396,8 @@ in [CHANGELOG.md](CHANGELOG.md).
 - An app running as administrator does not receive the overlay's drop, because Windows blocks
   drag-and-drop from a normal process into an elevated one.
 - One job runs at a time; the ring ignores new drops until the current job finishes.
+- Office conversions need the matching Office application installed; OpenDocument and CSV output
+  follow what that application can save.
 - Windows 11 adds Mica to DragDone's own windows; on Windows 10 the material is acrylic or opaque,
   depending on the preset.
 

@@ -72,13 +72,20 @@ public static class ActionExecutor
         var (head, arg) = SplitId(id);
         switch (head)
         {
+            case "custom":
+            {
+                var action = ctx.Settings.CustomActions.FirstOrDefault(a => a.Id == arg);
+                return action is null ? JobResult.Fail(Loc.T("custom.error.missing")) : CustomActions.Run(action, p, ctx);
+            }
+
             case "convert":
                 return p.Kind switch
                 {
                     FileKind.Image => EachFile(p, ctx, f => ImageOps.Convert(f, arg, ctx)),
                     FileKind.Pdf => EachFileMany(p, ctx, f => PdfOps.ToImages(f, arg, ctx)),
                     FileKind.Video or FileKind.Audio => EachFile(p, ctx, f => MediaOps.Convert(f, arg, ctx)),
-                    FileKind.Document => EachFile(p, ctx, f => DocumentOps.ToPdf(f, ctx)),
+                    FileKind.Document when arg == "pdf" => EachFile(p, ctx, f => DocumentOps.ToPdf(f, ctx)),
+                    FileKind.Document => EachFile(p, ctx, f => DocumentOps.OfficeConvert(f, arg, ctx)),
                     _ => JobResult.Fail(Loc.T("reason.unsupported")),
                 };
 

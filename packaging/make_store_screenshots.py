@@ -168,7 +168,7 @@ SHOTS = [
         render="en-convert-orbit.png",
         caption=dict(
             title="Drag a file. Pick an action.",
-            sub="Drop it on a screen edge and a ring of actions appears under the pointer — "
+            sub="While you drag, press a key and a ring of actions opens under the pointer — "
                 "no window to find, no menu to hunt through.",
             bullets=[
                 "Images, PDFs, video, audio and Office documents",
@@ -199,9 +199,38 @@ SHOTS = [
             sub="Layout, accent, density, trigger key and language, with a live preview of the real "
                 "renderer.",
             bullets=[
-                "Six presets, three ring layouts, four preview corners",
+                "Seven presets, nine shapes, nine opening animations",
                 "Follows the Windows display language, or pin English or Arabic",
                 "Looks export as a small, readable JSON file",
+            ],
+        ),
+        max_h=980,
+    ),
+    dict(
+        out="5-shapes.png",
+        render="en-petals.png",
+        caption=dict(
+            title="Shapes and motion",
+            sub="Petals, honeycomb, tiles, diamonds, fan, donut, wheel or orbit, opening with the "
+                "animation you choose.",
+            bullets=[
+                "Nine opening animations, from a quiet fade to an elastic bloom",
+                "Nine hover effects with their own strength and speed",
+                "Turns motion off when Windows animation effects are off",
+            ],
+        ),
+    ),
+    dict(
+        out="6-custom.png",
+        render="en-settings-custom.png",
+        caption=dict(
+            title="Add your own tools",
+            sub="Put any program in the ring, or turn it into a conversion with its own output "
+                "format.",
+            bullets=[
+                "Word, Excel and PowerPoint formats through installed Office",
+                "Custom outputs are named beside the original, never over it",
+                "Teach DragDone file types it does not know yet",
             ],
         ),
         max_h=980,
