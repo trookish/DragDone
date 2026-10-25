@@ -44,4 +44,5 @@ public static class Glyphs
     public const string Page = "\uE7C3";
     public const string Trim = "\uE8C6";
     public const string Rename = "\uE8AC";
+    public const string Print = "\uE749";
 }

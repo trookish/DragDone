@@ -13,11 +13,18 @@ public sealed class DragPayload
     public int Count => Paths.Count;
     public bool IsMultiple => Paths.Count > 1;
 
+    /// <summary>
+    /// The Office application every file belongs to, or None when the drag is plain text, mixes
+    /// families, or holds no Office documents at all.
+    /// </summary>
+    public OfficeFamily Office { get; }
+
     public DragPayload(IEnumerable<string> paths)
     {
         Paths = paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         Kind = FileKinds.Common(Paths);
         TotalBytes = Paths.Sum(SizeOf);
+        Office = FileKinds.OfficeCommon(Paths);
         var formats = Paths.Select(FileKinds.FormatToken).Distinct().ToList();
         CommonFormat = formats.Count == 1 && Kind != FileKind.Folder ? formats[0] : null;
     }

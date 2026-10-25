@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -165,7 +165,7 @@ public sealed class OverlayWindow : Window
         _infoRow.FlowDirection = Loc.Flow;
         if (_payload is not null)
         {
-            _infoTitle.Text = Loc.KindName(_payload.Kind, _payload.Count);
+            _infoTitle.Text = Loc.KindName(_payload.Kind, _payload.Count, _payload.Office);
             _infoMeta.Text = _payload.Count > 1
                 ? $"{_payload.Count} · {Loc.Size(_payload.TotalBytes)}"
                 : Loc.Size(_payload.TotalBytes);
@@ -505,10 +505,10 @@ public sealed class OverlayWindow : Window
         _menu.BackLabel = null;
         _ring = ActionCatalog.Build(payload, _tab, caps);
         _menu.Items = _ring;
-        _menu.SetHub(Loc.KindName(payload.Kind, payload.Count), Loc.Size(payload.TotalBytes), payload.Count);
+        _menu.SetHub(Loc.KindName(payload.Kind, payload.Count, payload.Office), Loc.Size(payload.TotalBytes), payload.Count);
         // The hub sits exactly under the cursor, where Explorer's drag ghost always covers it.
         // The file kind, size and count are therefore shown in a pill above the ring instead.
-        _infoTitle.Text = Loc.KindName(payload.Kind, payload.Count);
+        _infoTitle.Text = Loc.KindName(payload.Kind, payload.Count, payload.Office);
         _infoMeta.Text = payload.Count > 1
             ? $"{payload.Count} · {Loc.Size(payload.TotalBytes)}"
             : Loc.Size(payload.TotalBytes);

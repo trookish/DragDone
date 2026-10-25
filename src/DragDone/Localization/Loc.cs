@@ -221,6 +221,24 @@ public static class Loc
         return Digits(number) + " " + T(keys[u]);
     }
 
-    public static string KindName(Core.FileKind kind, int count) =>
-        T(count > 1 ? $"kind.{kind.ToString().ToLowerInvariant()}.plural" : $"kind.{kind.ToString().ToLowerInvariant()}");
+    /// <summary>
+    /// The kind of a drag, as the pill above the ring names it. Office documents are named after
+    /// the application that owns them ("Word document", "Spreadsheet", "Presentation") because
+    /// "Document" tells the user nothing when a .docx and a .txt behave so differently.
+    /// </summary>
+    public static string KindName(Core.FileKind kind, int count, Core.OfficeFamily office = Core.OfficeFamily.None)
+    {
+        var name = OfficeName(office) ?? kind.ToString().ToLowerInvariant();
+        return T(count > 1 ? $"kind.{name}.plural" : $"kind.{name}");
+    }
+
+    static string? OfficeName(Core.OfficeFamily family) => family switch
+    {
+        Core.OfficeFamily.Word => "worddocument",
+        Core.OfficeFamily.Excel => "spreadsheet",
+        Core.OfficeFamily.PowerPoint => "presentation",
+        Core.OfficeFamily.Visio => "drawing",
+        Core.OfficeFamily.Publisher => "publication",
+        _ => null,
+    };
 }

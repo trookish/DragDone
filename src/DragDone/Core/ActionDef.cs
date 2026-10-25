@@ -57,9 +57,52 @@ public sealed record ActionDef
 }
 
 /// <summary>What the machine can do right now; decides which sectors are enabled.</summary>
-public sealed record Capabilities(bool Ffmpeg, bool Office, IReadOnlyList<string> RecentFolders, IReadOnlyList<CustomAction>? Custom = null)
+/// <remarks>
+/// <see cref="Office"/> stays the all-or-nothing answer older callers pass (any Office at all).
+/// The per-app flags refine it; null means "not asked", and then the app follows
+/// <see cref="Office"/>, so <c>new Capabilities(false, false, folders)</c> keeps meaning
+/// "no Office anywhere". <see cref="Custom"/> carries the user's own actions into the rings.
+/// </remarks>
+public sealed record Capabilities(
+    bool Ffmpeg,
+    bool Office,
+    IReadOnlyList<string> RecentFolders,
+    bool? Word = null,
+    bool? Excel = null,
+    bool? PowerPoint = null,
+    bool? Visio = null,
+    bool? Publisher = null,
+    IReadOnlyList<CustomAction>? Custom = null)
 {
+    /// <summary>The user's own actions; see <see cref="Core.CustomActions"/>.</summary>
     public IReadOnlyList<CustomAction> CustomActions => Custom ?? Array.Empty<CustomAction>();
 
-    public static Capabilities All { get; } = new(true, true, Array.Empty<string>());
+    public static Capabilities All { get; } =
+        new(true, true, Array.Empty<string>(), Word: true, Excel: true, PowerPoint: true, Visio: true, Publisher: true);
+
+    /// <summary>No external tool at all: only the built-in, dependency-free actions stay enabled.</summary>
+    public static Capabilities None { get; } =
+        new(false, false, Array.Empty<string>(), Word: false, Excel: false, PowerPoint: false, Visio: false, Publisher: false);
+
+    /// <summary>Whether the application that owns <paramref name="family"/> can be automated.</summary>
+    public bool Can(OfficeFamily family) => family switch
+    {
+        OfficeFamily.Word => Word ?? Office,
+        OfficeFamily.Excel => Excel ?? Office,
+        OfficeFamily.PowerPoint => PowerPoint ?? Office,
+        OfficeFamily.Visio => Visio ?? Office,
+        OfficeFamily.Publisher => Publisher ?? Office,
+        _ => false,
+    };
+
+    /// <summary>Catalogue key naming the application a disabled sector is waiting for.</summary>
+    public static string MissingKey(OfficeFamily family) => family switch
+    {
+        OfficeFamily.Word => "reason.needsWord",
+        OfficeFamily.Excel => "reason.needsExcel",
+        OfficeFamily.PowerPoint => "reason.needsPowerPoint",
+        OfficeFamily.Visio => "reason.needsVisio",
+        OfficeFamily.Publisher => "reason.needsPublisher",
+        _ => "reason.needsOffice",
+    };
 }

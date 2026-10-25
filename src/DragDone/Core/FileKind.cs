@@ -13,14 +13,6 @@ public enum FileKind
     Mixed,
 }
 
-/// <summary>The Office application that converts a document.</summary>
-public enum OfficeApp
-{
-    Word,
-    Excel,
-    PowerPoint,
-}
-
 public static class FileKinds
 {
     static readonly Dictionary<string, FileKind> ByExtension = Build();
@@ -41,7 +33,10 @@ public static class FileKinds
             ".aiff", ".aif", ".amr", ".alac");
         Add(FileKind.Pdf, ".pdf");
         Add(FileKind.Document, ".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".log", ".ini",
-            ".yaml", ".yml", ".rtf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".ods", ".ppt", ".pptx", ".odp",
+            ".yaml", ".yml", ".rtf", ".doc", ".docx", ".docm", ".dot", ".dotx", ".dotm", ".odt",
+            ".xls", ".xlsx", ".xlsm", ".xlsb", ".ods",
+            ".ppt", ".pptx", ".pptm", ".pps", ".ppsx", ".odp",
+            ".vsd", ".vsdx", ".pub",
             ".html", ".htm", ".cs", ".py", ".js", ".ts", ".css");
         Add(FileKind.Archive, ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".cab");
         // .ts is ambiguous (MPEG transport stream vs TypeScript); video wins because of its size profile.
@@ -105,32 +100,51 @@ public static class FileKinds
         _ => false,
     };
 
-    public static bool IsOfficeDocument(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    public static bool IsOfficeDocument(string path) => Office(path) != OfficeFamily.None;
+
+    /// <summary>
+    /// The Office application that owns <paramref name="path"/>, or <see cref="OfficeFamily.None"/>
+    /// for plain files. Detection is by extension only: it answers "which app would open this",
+    /// never "is that app installed" (see <see cref="Capabilities"/>).
+    /// </summary>
+    public static OfficeFamily Office(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
-        ".doc" or ".docx" or ".odt" or ".rtf" or ".xls" or ".xlsx" or ".ods" or ".ppt" or ".pptx" or ".odp" => true,
+        ".doc" or ".docx" or ".docm" or ".dot" or ".dotx" or ".dotm" or ".rtf" or ".odt" => OfficeFamily.Word,
+        ".xls" or ".xlsx" or ".xlsm" or ".xlsb" or ".ods" => OfficeFamily.Excel,
+        ".ppt" or ".pptx" or ".pptm" or ".pps" or ".ppsx" or ".odp" => OfficeFamily.PowerPoint,
+        ".vsd" or ".vsdx" => OfficeFamily.Visio,
+        ".pub" => OfficeFamily.Publisher,
+        _ => OfficeFamily.None,
+    };
+
+    /// <summary>
+    /// The one family every path shares, or None when they differ or are not Office documents.
+    /// A drag of a .docx and a .txt is a mixed document drag: it still converts, per file.
+    /// </summary>
+    public static OfficeFamily OfficeCommon(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return OfficeFamily.None;
+        var first = Office(paths[0]);
+        if (first == OfficeFamily.None) return OfficeFamily.None;
+        for (var i = 1; i < paths.Count; i++)
+        {
+            if (Office(paths[i]) != first) return OfficeFamily.None;
+        }
+        return first;
+    }
+
+    /// <summary>
+    /// An OOXML package (the docx/xlsx/pptx family). These are zips of XML parts, so DragDone can
+    /// read and rewrite them with no Office installed at all.
+    /// </summary>
+    public static bool IsOpenXml(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".docx" or ".docm" or ".dotx" or ".dotm" or ".xlsx" or ".xlsm" or ".pptx" or ".pptm" or ".ppsx" => true,
         _ => false,
     };
 
-    /// <summary>The Office application that opens a file, or null for anything Office does not own.</summary>
-    public static OfficeApp? OfficeAppFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
-    {
-        ".doc" or ".docx" or ".odt" or ".rtf" => OfficeApp.Word,
-        ".xls" or ".xlsx" or ".ods" or ".csv" => OfficeApp.Excel,
-        ".ppt" or ".pptx" or ".odp" => OfficeApp.PowerPoint,
-        _ => null,
-    };
-
-    /// <summary>Formats each Office application can save to, in ring order. PDF always comes first.</summary>
-    public static IReadOnlyList<string> OfficeTargets(OfficeApp app) => app switch
-    {
-        OfficeApp.Word => WordTargets,
-        OfficeApp.Excel => ExcelTargets,
-        _ => PowerPointTargets,
-    };
-
-    static readonly string[] WordTargets = { "pdf", "docx", "doc", "odt", "rtf", "txt", "html" };
-    static readonly string[] ExcelTargets = { "pdf", "xlsx", "xls", "ods", "csv" };
-    static readonly string[] PowerPointTargets = { "pdf", "pptx", "ppt", "odp" };
+    /// <summary>A text file Excel can open directly (comma or tab separated).</summary>
+    public static bool IsSpreadsheetText(string path) => Path.GetExtension(path).ToLowerInvariant() is ".csv" or ".tsv";
 
     /// <summary>Normalised format token used to dim the "already this format" sector.</summary>
     public static string FormatToken(string path)
@@ -149,4 +163,18 @@ public static class FileKinds
             _ => ext,
         };
     }
+}
+
+/// <summary>
+/// Which Office application owns a document. A kind, not a capability: a .docx is a Word document
+/// whether or not Word is installed, which is what lets the menu explain what is missing.
+/// </summary>
+public enum OfficeFamily
+{
+    None,
+    Word,
+    Excel,
+    PowerPoint,
+    Visio,
+    Publisher,
 }
