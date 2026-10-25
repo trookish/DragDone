@@ -6,9 +6,46 @@ using DragDone.Localization;
 
 namespace DragDone.Processors;
 
-/// <summary>Zip, extract, hash, move.</summary>
+/// <summary>Zip, extract, hash, move, print.</summary>
 public static class FileOps
 {
+    /// <summary>
+    /// Asks the shell to print a file through the registered <c>print</c> verb, which is what a
+    /// right-click → Print does. The handler owns the dialog and the spooler, so this only reports
+    /// that the request was handed over; a file type with no print verb is what fails here.
+    /// </summary>
+    public static void Print(string path)
+    {
+        try
+        {
+            var info = new ProcessStartInfo(path)
+            {
+                Verb = "print",
+                UseShellExecute = true,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            using var process = Process.Start(info);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            throw new UserFacingException(Loc.T("error.print"));
+        }
+    }
+
+    /// <summary>Removes a folder we created for outputs, without masking the error that caused it.</summary>
+    public static void TryDeleteFolder(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any()) Directory.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A leftover empty folder is not worth hiding the real failure.
+        }
+    }
+
     // ------------------------------------------------------------------ zip
 
     public static string Zip(IReadOnlyList<string> paths, JobContext ctx)

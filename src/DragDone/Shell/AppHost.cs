@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using DragDone.Core;
@@ -21,7 +21,6 @@ public sealed class AppHost : IOverlayHost, IDisposable
     readonly OverlayWindow _overlay;
     readonly DragWatcher _watcher;
     readonly Forms.NotifyIcon _tray;
-    readonly bool _office;
     SettingsWindow? _settingsWindow;
     UndoRecord? _lastUndo;
     readonly DispatcherTimer _idleTrim;
@@ -34,7 +33,8 @@ public sealed class AppHost : IOverlayHost, IDisposable
     {
         Settings = settings;
         _ui = Dispatcher.CurrentDispatcher;
-        _office = DocumentOps.OfficeAvailable;
+        // One registry read now, so the first drag does not pay for it.
+        _ = OfficeApps.Any;
         var firstRun = !File.Exists(Settings.FilePath);
         ApplySettings(firstRun: true);
         // Write both files on the very first run: the docs promise a theme you can open and edit,
@@ -239,7 +239,7 @@ public sealed class AppHost : IOverlayHost, IDisposable
     // ------------------------------------------------------------------ IOverlayHost
 
     public Capabilities Capabilities() =>
-        new(Ffmpeg.Locate(Settings.FfmpegPath) is not null, _office, Settings.RecentFolders);
+        OfficeApps.Detect(Ffmpeg.Locate(Settings.FfmpegPath) is not null, Settings.RecentFolders);
 
     public void RememberUndo(UndoRecord record)
     {

@@ -9,21 +9,24 @@ using DragDone.Localization;
 namespace DragDone.Processors;
 
 /// <summary>
-/// Document → PDF. Plain-text formats are laid out by WPF (full Arabic shaping and bidi) and
-/// embedded as page images; Office formats are exported by the installed Office, if any.
-/// Must run on an STA thread.
+/// Documents. Plain-text formats are laid out by WPF (full Arabic shaping and bidi) and embedded
+/// as page images; Office formats are delegated to <see cref="OfficeOps"/>, which drives the
+/// application that owns them. Must run on an STA thread.
 /// </summary>
 public static class DocumentOps
 {
-    public static bool OfficeAvailable =>
-        Type.GetTypeFromProgID("Word.Application") is not null ||
-        Type.GetTypeFromProgID("Excel.Application") is not null ||
-        Type.GetTypeFromProgID("PowerPoint.Application") is not null;
+    public static bool OfficeAvailable => OfficeOps.AnyInstalled;
 
-    public static string ToPdf(string source, JobContext ctx)
+    public static string ToPdf(string source, JobContext ctx) => Convert(source, "pdf", ctx);
+
+    /// <summary>
+    /// Converts one document to <paramref name="token"/>. An Office document goes through its own
+    /// application; plain text can only become a PDF, because that is the only thing we can render.
+    /// </summary>
+    public static string Convert(string source, string token, JobContext ctx)
     {
-        if (FileKinds.IsOfficeDocument(source)) return OfficeToPdf(source, ctx);
-        if (FileKinds.IsPlainText(source)) return TextToPdf(source, ctx);
+        if (FileKinds.Office(source) != OfficeFamily.None) return OfficeOps.Convert(source, token, ctx);
+        if (token == "pdf" && FileKinds.IsPlainText(source)) return TextToPdf(source, ctx);
         throw new UserFacingException(Loc.T("reason.unsupported"));
     }
 
@@ -133,67 +136,4 @@ public static class DocumentOps
 
     // ------------------------------------------------------------------ Office
 
-    public static string OfficeToPdf(string source, JobContext ctx)
-    {
-        var output = OutputPaths.For(source, "pdf");
-        var full = Path.GetFullPath(source);
-        var ext = Path.GetExtension(source).ToLowerInvariant();
-        try
-        {
-            switch (ext)
-            {
-                case ".xls" or ".xlsx" or ".ods":
-                    WithApp("Excel.Application", app =>
-                    {
-                        app.DisplayAlerts = false;
-                        dynamic wb = app.Workbooks.Open(full, 0, true);
-                        try { wb.ExportAsFixedFormat(0, output); }
-                        finally { wb.Close(false); }
-                    });
-                    break;
-                case ".ppt" or ".pptx" or ".odp":
-                    WithApp("PowerPoint.Application", app =>
-                    {
-                        dynamic pres = app.Presentations.Open(full, -1, 0, 0); // ReadOnly, Untitled=false, WithWindow=false
-                        try { pres.SaveAs(output, 32); }
-                        finally { pres.Close(); }
-                    });
-                    break;
-                default:
-                    WithApp("Word.Application", app =>
-                    {
-                        app.DisplayAlerts = 0;
-                        dynamic doc = app.Documents.Open(full, false, true, false);
-                        try { doc.ExportAsFixedFormat(output, 17); }
-                        finally { doc.Close(false); }
-                    });
-                    break;
-            }
-        }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException
-                                       or InvalidOperationException)
-        {
-            Ffmpeg.TryDelete(output);
-            throw new UserFacingException(Loc.T("error.office"));
-        }
-        if (!File.Exists(output)) throw new UserFacingException(Loc.T("error.office"));
-        return output;
-    }
-
-    static void WithApp(string progId, Action<dynamic> work)
-    {
-        var type = Type.GetTypeFromProgID(progId) ?? throw new UserFacingException(Loc.T("reason.needsOffice"));
-        dynamic app = Activator.CreateInstance(type)!;
-        try
-        {
-            if (progId != "PowerPoint.Application") app.Visible = false;
-            work(app);
-        }
-        finally
-        {
-            try { app.Quit(); }
-            catch (Exception) { /* Office already gone */ }
-            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(app);
-        }
-    }
 }

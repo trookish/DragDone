@@ -11,7 +11,7 @@ namespace DragDone.Core;
 public static class ActionExecutor
 {
     public static bool IsInteractive(string id) =>
-        id is "act.share" or "act.shelf" or "act.terminal" or "act.move:browse" or "img.crop:free" or "act.rename";
+        id is "act.share" or "act.shelf" or "act.terminal" or "act.move:browse" or "img.crop:free" or "act.rename" or "act.print";
 
     /// <summary>Runs <paramref name="id"/> on a dedicated STA thread (WPF imaging and Office COM need one).</summary>
     public static Task<JobResult> RunAsync(string id, DragPayload p, JobContext ctx)
@@ -78,7 +78,7 @@ public static class ActionExecutor
                     FileKind.Image => EachFile(p, ctx, f => ImageOps.Convert(f, arg, ctx)),
                     FileKind.Pdf => EachFileMany(p, ctx, f => PdfOps.ToImages(f, arg, ctx)),
                     FileKind.Video or FileKind.Audio => EachFile(p, ctx, f => MediaOps.Convert(f, arg, ctx)),
-                    FileKind.Document => EachFile(p, ctx, f => DocumentOps.ToPdf(f, ctx)),
+                    FileKind.Document => DocumentConvert(p, ctx, arg),
                     _ => JobResult.Fail(Loc.T("reason.unsupported")),
                 };
 
@@ -128,7 +128,19 @@ public static class ActionExecutor
             case "file.zip": return Single(ctx, () => FileOps.Zip(p.Paths, ctx), "result.zipped");
             case "file.hash": return Hash(p, ctx);
 
+            // ---- documents: OOXML parts are read directly, so these need no Office installed
+            case "doc.strip": return EachFile(p, ctx, f => OpenXmlOps.StripMetadata(f, ctx));
+            case "doc.images": return EachFile(p, ctx, f => OpenXmlOps.ExtractImages(f, ctx));
+            case "doc.text": return EachFile(p, ctx, f => OpenXmlOps.ExtractText(f, ctx));
+            case "doc.stats": return Statistics(p, ctx);
+            case "doc.compress": return EachFile(p, ctx, f => OpenXmlOps.CompressMedia(f, ctx));
+
+            // ---- documents: these two go through the owning Office application
+            case "doc.sheets": return EachFile(p, ctx, f => OfficeOps.SheetsToCsv(f, ctx));
+            case "doc.slides": return EachFileMany(p, ctx, f => new[] { OfficeOps.SlidesToImages(f, "png", ctx) });
+
             // ---- actions
+            case "act.print": return Print(p, ctx);
             case "act.copypath":
             {
                 var text = string.Join(Environment.NewLine, p.Paths.Select(x => p.IsMultiple ? $"\"{x}\"" : x));
@@ -233,6 +245,84 @@ public static class ActionExecutor
             MessageKey = "result.hashCopied",
             Detail = p.IsMultiple ? Loc.F("result.hashCount", ("n", p.Count)) : lines[0][..16] + "…",
             Clipboard = text,
+        };
+    }
+
+    /// <summary>
+    /// Conversion for documents. Slide export writes a folder per file, so it is the many-outputs
+    /// variant; every other target writes one file or fails with a localized reason.
+    /// </summary>
+    static JobResult DocumentConvert(DragPayload p, JobContext ctx, string token) => token switch
+    {
+        "pngslides" => EachFileMany(p, ctx, f => new[] { OfficeOps.SlidesToImages(f, "png", ctx) }),
+        "jpgslides" => EachFileMany(p, ctx, f => new[] { OfficeOps.SlidesToImages(f, "jpg", ctx) }),
+        _ => EachFile(p, ctx, f => DocumentOps.Convert(f, token, ctx)),
+    };
+
+    /// <summary>
+    /// Words, characters and pages/slides/sheets, copied to the clipboard the way a hash is:
+    /// the value is the point, so it is an Info result rather than a created file.
+    /// </summary>
+    static JobResult Statistics(DragPayload p, JobContext ctx)
+    {
+        var blocks = new List<string>();
+        var summaries = new List<string>();
+        for (var i = 0; i < p.Count; i++)
+        {
+            ctx.Token.ThrowIfCancellationRequested();
+            ctx.BeginItem(i, p.Count);
+            var s = OpenXmlOps.ReadStats(p.Paths[i]);
+            var lines = new List<string> { p.Paths[i] };
+            lines.Add(Loc.F("stats.words", ("n", s.Words)));
+            lines.Add(Loc.F("stats.characters", ("n", s.Characters)));
+            var one = Loc.F("stats.wordsShort", ("n", s.Words));
+            if (s.Sections > 0)
+            {
+                lines.Add(Loc.F(s.SectionsKey, ("n", s.Sections)));
+                one += " · " + Loc.F(s.Sections == 1 ? s.SectionsOneKey : s.SectionsShortKey, ("n", s.Sections));
+            }
+            blocks.Add(string.Join(Environment.NewLine, lines));
+            summaries.Add(one);
+        }
+        ctx.ReportOverall(1);
+        return new JobResult
+        {
+            Outcome = JobOutcome.Info,
+            MessageKey = "result.statsCopied",
+            Detail = summaries[0],
+            Clipboard = string.Join(Environment.NewLine, blocks),
+        };
+    }
+
+    /// <summary>
+    /// Hands every file to its default handler's print verb. Printing is the other app's job and
+    /// may show a dialog, so this reports what was handed over, not what came out of the printer.
+    /// </summary>
+    static JobResult Print(DragPayload p, JobContext ctx)
+    {
+        var failures = new List<string>();
+        var sent = 0;
+        for (var i = 0; i < p.Count; i++)
+        {
+            ctx.Token.ThrowIfCancellationRequested();
+            ctx.BeginItem(i, p.Count);
+            try
+            {
+                FileOps.Print(p.Paths[i]);
+                sent++;
+            }
+            catch (UserFacingException e) when (p.IsMultiple)
+            {
+                failures.Add($"{Path.GetFileName(p.Paths[i])}: {e.Message}");
+            }
+        }
+        ctx.ReportOverall(1);
+        if (sent == 0) return JobResult.Fail(failures.Count > 0 ? failures[0] : Loc.T("error.print"));
+        return new JobResult
+        {
+            Outcome = JobOutcome.Info,
+            MessageKey = "result.printed",
+            Detail = sent > 1 ? Loc.F("result.printedCount", ("n", sent)) : null,
         };
     }
 
